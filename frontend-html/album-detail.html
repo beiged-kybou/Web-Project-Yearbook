@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Album Details - IUT Yearbook</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <style>
+        .photo-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .photo-card {
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            box-shadow: var(--shadow-sm);
+            background: white;
+            transition: transform 0.2s;
+        }
+
+        .photo-card:hover {
+            transform: scale(1.02);
+            z-index: 10;
+        }
+
+        .photo {
+            aspect-ratio: 1;
+            background-color: #ddd;
+            background-size: cover;
+            background-position: center;
+        }
+
+        .photo-caption {
+            padding: 0.5rem;
+            font-size: 0.875rem;
+            color: var(--color-text-main);
+        }
+
+        .date-divider {
+            display: flex;
+            align-items: center;
+            margin: 2rem 0 1rem;
+            color: var(--color-text-muted);
+            font-weight: 500;
+        }
+
+        .date-divider::after {
+            content: "";
+            flex: 1;
+            border-bottom: 1px solid var(--color-border);
+            margin-left: 1rem;
+        }
+    </style>
+</head>
+
+<body>
+    <nav class="navbar">
+        <div class="container nav-container">
+            <a href="dashboard.html" class="nav-logo">IUT Yearbook</a>
+            <div class="nav-links">
+                <a href="dashboard.html">Dashboard</a>
+                <a href="albums.html">Albums</a>
+                <a href="index.html">Logout</a>
+            </div>
+        </div>
+    </nav>
+
+    <div id="album-header"
+        style="background-color: var(--color-surface); border-bottom: 1px solid var(--color-border); padding: 3rem 0;">
+        <div class="container">
+            <span id="album-type-badge"
+                style="background-color: #e0e7ff; color: var(--color-primary-dark); padding: 0.25rem 0.75rem; border-radius: 99px; font-size: 0.875rem; font-weight: 600;">Personal
+                Album</span>
+            <h1 id="album-title" style="font-size: 2.5rem; margin: 0.5rem 0;">Loading...</h1>
+            <p id="album-desc" class="text-muted" style="max-width: 600px;">...</p>
+            <div style="margin-top: 1.5rem; font-weight: 500;">
+                <span id="album-stats">...</span>
+            </div>
+        </div>
+    </div>
+
+    <main id="album-content" class="container" style="padding-top: 2rem;">
+        <!-- Dynamic Content Here -->
+    </main>
+
+    <script src="js/album-manager.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const albumId = urlParams.get('id');
+
+            if (!albumId) {
+                document.getElementById('album-title').innerText = "Album Not Found";
+                return;
+            }
+
+            const album = window.AlbumManager.getAlbumById(albumId);
+
+            if (!album) {
+                // If mocked static albums (Batch/General) are clicked, they won't be in localStorage.
+                // We'll show a generic mock view for them.
+                if (albumId === 'batch' || albumId === 'dept' || albumId === 'general') {
+                    renderMockAlbum(albumId);
+                } else {
+                    document.getElementById('album-title').innerText = "Album Not Found";
+                }
+                return;
+            }
+
+            // Render Header
+            document.getElementById('album-title').innerText = album.title;
+            document.getElementById('album-desc').innerText = album.description;
+            document.getElementById('album-stats').innerText = `${album.photoCount} Photos • Created ${album.createdAt}`;
+
+            // Render Photos Segmented by Date
+            const contentDiv = document.getElementById('album-content');
+
+            if (album.photos && album.photos.length > 0) {
+                // Group by date
+                const grouped = {};
+                album.photos.forEach(photo => {
+                    const dateStr = new Date(photo.date).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+                    if (!grouped[dateStr]) grouped[dateStr] = [];
+                    grouped[dateStr].push(photo);
+                });
+
+                // Sort dates descending
+                const sortedDates = Object.keys(grouped).sort((a, b) => new Date(b) - new Date(a));
+
+                sortedDates.forEach(date => {
+                    // Date Header
+                    const dateHeader = document.createElement('div');
+                    dateHeader.className = 'date-divider';
+                    dateHeader.innerText = date;
+                    contentDiv.appendChild(dateHeader);
+
+                    // Grid
+                    const grid = document.createElement('div');
+                    grid.className = 'photo-grid';
+
+                    grouped[date].forEach(photo => {
+                        grid.innerHTML += `
+                            <div class="photo-card">
+                                <div class="photo" style="background-color: ${photo.color}"></div>
+                                <div class="photo-caption">${photo.description || photo.name}</div>
+                            </div>
+                        `;
+                    });
+                    contentDiv.appendChild(grid);
+                });
+            } else {
+                contentDiv.innerHTML = '<p class="text-muted">No photos in this album yet.</p>';
+            }
+        });
+
+        function renderMockAlbum(type) {
+            document.getElementById('album-title').innerText = type.charAt(0).toUpperCase() + type.slice(1) + " Album";
+            document.getElementById('album-desc').innerText = "This is a system generated album.";
+            document.getElementById('album-type-badge').innerText = type.charAt(0).toUpperCase() + type.slice(1);
+
+            const contentDiv = document.getElementById('album-content');
+            contentDiv.innerHTML = `
+                <div class="date-divider">Today</div>
+                <div class="photo-grid">
+                    <div class="photo-card">
+                         <div class="photo" style="background-color: #cbd5e1; display:flex; align-items:center; justify-content:center;">Mock Photo</div>
+                         <div class="photo-caption">Example Photo</div>
+                    </div>
+                </div>
+            `;
+        }
+    </script>
+</body>
+
+</html>
