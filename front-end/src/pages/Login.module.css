@@ -1,0 +1,86 @@
+.page {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--color-bg);
+    padding: var(--spacing-md);
+    background-image: radial-gradient(var(--color-border) 1px, transparent 1px);
+    background-size: 20px 20px;
+}
+
+.card {
+    background: var(--color-surface);
+    padding: var(--spacing-xl);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    width: 100%;
+    max-width: 400px;
+    border: 1px solid var(--color-border);
+}
+
+.header {
+    text-align: center;
+    margin-bottom: var(--spacing-lg);
+}
+
+.title {
+    font-size: 1.75rem;
+    color: var(--color-primary);
+    margin-bottom: var(--spacing-xs);
+}
+
+.subtitle {
+    color: var(--color-text-muted);
+    font-size: 0.875rem;
+}
+
+.form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+}
+
+.errorAlert {
+    padding: var(--spacing-sm);
+    background-color: #fee2e2;
+    color: var(--color-error);
+    border-radius: var(--radius-md);
+    font-size: 0.875rem;
+    text-align: center;
+}
+
+.actions {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.forgotLink {
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+}
+
+.forgotLink:hover {
+    text-decoration: underline;
+    color: var(--color-primary);
+}
+
+.submitBtn {
+    width: 100%;
+}
+
+.footer {
+    margin-top: var(--spacing-lg);
+    text-align: center;
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+}
+
+.registerLink {
+    color: var(--color-primary);
+    font-weight: 600;
+}
+
+.registerLink:hover {
+    text-decoration: underline;
+}
