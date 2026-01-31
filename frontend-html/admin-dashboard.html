@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - IUT Yearbook</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <script>
+        // Check auth
+        const role = localStorage.getItem('role');
+        if (role !== 'admin') window.location.href = 'login.html';
+    </script>
+</head>
+
+<body>
+    <nav class="navbar" style="background-color: #1e293b; color: white;">
+        <div class="container nav-container">
+            <a href="admin-dashboard.html" class="nav-logo" style="color: white;">IUT Yearbook Admin</a>
+            <div class="nav-links">
+                <a href="admin-dashboard.html" style="font-weight: 500; color: #60a5fa;">Dashboard</a>
+                <a href="#" style="color: #cbd5e1;">Users</a>
+                <a href="#" style="color: #cbd5e1;">Reports</a>
+                <a href="index.html" onclick="localStorage.clear()" style="color: #cbd5e1;">Logout</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container" style="padding-top: 2rem;">
+        <h1>Admin Overview</h1>
+        <p class="text-muted" style="margin-bottom: 2rem;">System management and statistics.</p>
+
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; margin-bottom: 2rem;">
+            <div class="card">
+                <h3>Total Users</h3>
+                <p style="font-size: 2rem; font-weight: 700; color: var(--color-primary);">1,245</p>
+            </div>
+            <div class="card">
+                <h3>Total Albums</h3>
+                <p style="font-size: 2rem; font-weight: 700; color: var(--color-secondary);">86</p>
+            </div>
+            <div class="card">
+                <h3>Pendling Approvals</h3>
+                <p style="font-size: 2rem; font-weight: 700; color: var(--color-warning);">12</p>
+            </div>
+        </div>
+
+        <h2>Recent Approvals</h2>
+        <div class="card" style="margin-top: 1rem;">
+            <table style="width: 100%; text-align: left; border-collapse: collapse;">
+                <thead>
+                    <tr style="border-bottom: 1px solid var(--color-border);">
+                        <th style="padding: 0.75rem;">Request Type</th>
+                        <th style="padding: 0.75rem;">Requester</th>
+                        <th style="padding: 0.75rem;">Date</th>
+                        <th style="padding: 0.75rem;">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td style="padding: 0.75rem;">Co-Admin Request</td>
+                        <td style="padding: 0.75rem;">Student 1904123</td>
+                        <td style="padding: 0.75rem;">Oct 24, 2023</td>
+                        <td style="padding: 0.75rem;">
+                            <button class="btn btn-primary"
+                                style="padding: 0.25rem 0.75rem; font-size: 0.875rem;">Approve</button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+    </main>
+</body>
+
+</html>

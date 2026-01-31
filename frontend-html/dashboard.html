@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - IUT Yearbook</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <script>
+        // Check auth
+        const role = localStorage.getItem('role');
+        if (!role) window.location.href = 'login.html';
+        if (role === 'admin') window.location.href = 'admin-dashboard.html';
+
+        // Mock notification count
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('notif-count').innerText = '(2)';
+        });
+    </script>
+</head>
+
+<body>
+    <nav class="navbar">
+        <div class="container nav-container">
+            <a href="dashboard.html" class="nav-logo">IUT Yearbook</a>
+            <div class="nav-links">
+                <a href="dashboard.html" style="font-weight: 600; color: var(--color-primary);">Dashboard</a>
+                <a href="#" class="text-muted">Notifications <span id="notif-count"></span></a>
+                <a href="index.html" onclick="localStorage.clear()">Logout</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container" style="padding-top: 2rem;">
+
+        <!-- Search Section -->
+        <div style="margin-bottom: 2rem; display: flex; gap: 1rem;">
+            <input type="text" placeholder="Search albums..." style="max-width: 400px;">
+            <button class="btn btn-primary">Search</button>
+        </div>
+
+        <!-- My Albums Section -->
+        <section style="margin-bottom: 3rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <h2>My Albums</h2>
+            </div>
+
+            <div class="albums-grid">
+                <!-- Create Album Option -->
+                <a href="create-album.html" class="create-album-card" style="text-decoration: none;">
+                    <span style="font-size: 2rem; margin-bottom: 0.5rem;">+</span>
+                    <span style="font-weight: 500;">Create Album</span>
+                </a>
+
+                <!-- Batch Album -->
+                <a href="album-detail.html" class="album-card" style="text-decoration: none;">
+                    <div class="album-cover">🎓</div>
+                    <div class="album-content">
+                        <span class="album-type">Batch</span>
+                        <h3 class="album-title">CSE 2022</h3>
+                    </div>
+                </a>
+
+                <!-- Dept Album -->
+                <a href="album-detail.html" class="album-card" style="text-decoration: none;">
+                    <div class="album-cover">🏛️</div>
+                    <div class="album-content">
+                        <span class="album-type">Dept</span>
+                        <h3 class="album-title">CSE Dept</h3>
+                    </div>
+                </a>
+
+                <!-- Personal Albums Container -->
+                <div id="personal-albums-container" style="display: contents;">
+                    <!-- JS will populate this -->
+                </div>
+            </div>
+
+            <script src="js/album-manager.js"></script>
+            <script>
+                document.addEventListener('DOMContentLoaded', () => {
+                    const container = document.getElementById('personal-albums-container');
+                    const albums = window.AlbumManager.getAlbums();
+
+                    // Filter for Personal albums (though simplistic here)
+                    const personalAlbums = albums.filter(a => a.type === 'Personal');
+
+                    personalAlbums.forEach(album => {
+                        const albumHTML = `
+                            <a href="album-detail.html?id=${album.id}" class="album-card" style="text-decoration: none;">
+                                <div class="album-cover" style="background-color: ${album.coverColor}">👤</div>
+                                <div class="album-content">
+                                    <span class="album-type">${album.type}</span>
+                                    <h3 class="album-title">${album.title}</h3>
+                                    <p class="text-muted" style="font-size: 0.75rem;">${album.photoCount} Photos</p>
+                                </div>
+                            </a>
+                        `;
+                        container.insertAdjacentHTML('afterbegin', albumHTML);
+                    });
+                });
+            </script>
+        </section>
+
+        <!-- Explore Section -->
+        <section>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <h2>Explore</h2>
+                <a href="clubs.html" class="text-primary" style="font-size: 0.875rem;">View All</a>
+            </div>
+
+            <div class="albums-grid">
+                <!-- Club Album 1 -->
+                <div class="album-card">
+                    <div class="album-cover">📸</div>
+                    <div class="album-content">
+                        <span class="album-type">Club</span>
+                        <h3 class="album-title">Photography Society</h3>
+                    </div>
+                </div>
+
+                <!-- Club Album 2 -->
+                <div class="album-card">
+                    <div class="album-cover">💻</div>
+                    <div class="album-content">
+                        <span class="album-type">Club</span>
+                        <h3 class="album-title">Computer Society</h3>
+                    </div>
+                </div>
+
+                <!-- Public Event -->
+                <div class="album-card">
+                    <div class="album-cover">🎉</div>
+                    <div class="album-content">
+                        <span class="album-type">Event</span>
+                        <h3 class="album-title">Welcome Freshers</h3>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+</body>
+
+</html>
