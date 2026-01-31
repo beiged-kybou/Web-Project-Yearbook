@@ -1,0 +1,20 @@
+.card {
+    max-width: 600px;
+    /* Wider card for form grid */
+}
+
+.formGrid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-md);
+}
+
+.fullWidth {
+    grid-column: 1 / -1;
+}
+
+@media (max-width: 600px) {
+    .formGrid {
+        grid-template-columns: 1fr;
+    }
+}
