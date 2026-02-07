@@ -8,7 +8,7 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-export const connectDB = async () => {
+const connectDB = async () => {
   try {
     const pool = new Pool({
       host: process.env.DB_HOST,
@@ -30,3 +30,5 @@ export const connectDB = async () => {
     process.exit(1);
   }
 };
+
+export default connectDB;
