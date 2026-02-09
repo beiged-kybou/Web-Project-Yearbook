@@ -28,8 +28,7 @@ CREATE TABLE memories (
     id SERIAL PRIMARY KEY,
     title VARCHAR(200) NOT NULL,
     content TEXT,
-    image_url TEXT,
-    created_by INTEGER REFERENCES students(student_id),
+    created_by VARCHAR(9) REFERENCES students(student_id),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -39,6 +38,19 @@ CREATE TABLE memory_participants (
     PRIMARY KEY (memory_id, student_id)
 );
 
+CREATE TABLE images (
+    id SERIAL PRIMARY KEY,
+    entity_type VARCHAR(20) NOT NULL CHECK (entity_type IN ('student', 'memory')),
+    entity_id VARCHAR(20) NOT NULL,
+    photo_url TEXT NOT NULL,
+    sort_order INTEGER DEFAULT 0,
+    uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    UNIQUE(entity_type, entity_id, sort_order),
+    CHECK ((entity_type = 'student' AND entity_id ~ '^CSE|ECE') OR (entity_type = 'memory'))
+);
+
 CREATE INDEX idx_students_year ON students(graduation_year);
 CREATE INDEX idx_students_name ON students(first_name, last_name);
-CREATE INDEX idx_memories_students ON memories(id);
+CREATE INDEX idx_images_entity ON images(entity_type, entity_id);
+CREATE INDEX idx_images_entity_order ON images(entity_type, entity_id, sort_order);

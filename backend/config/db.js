@@ -22,11 +22,13 @@ const connectDB = async () => {
     console.log("PostgreSQL connected successfully!");
 
     pool.on("error", (err) => {
-      console.log("Unexpected PostgreSQL error:", err);
+      console.error("Unexpected PostgreSQL error:", err);
       process.exit(1);
     });
+
+    return pool;
   } catch (error) {
-    console.log("Error connecting to PostgreSQL:", error);
+    console.error("Error connecting to PostgreSQL:", error);
     process.exit(1);
   }
 };
