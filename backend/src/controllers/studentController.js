@@ -66,7 +66,7 @@ export async function getStudentById(req, res) {
       "SELECT * FROM students WHERE student_id = $1",
       [id],
     );
-    res.json(result.rows);
+    res.json(result.rows[0]);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -183,11 +183,9 @@ export async function deleteStudent(req, res) {
     res.json({ message: `Student ${id} deleted successfully` });
   } catch (error) {
     if (error.code === "23503") {
-      return res
-        .status(400)
-        .json({
-          error: "Cannot delete student: they are linked to existing memories.",
-        });
+      return res.status(400).json({
+        error: "Cannot delete student: they are linked to existing memories.",
+      });
     }
     res.status(500).json({ error: error.message });
   }
