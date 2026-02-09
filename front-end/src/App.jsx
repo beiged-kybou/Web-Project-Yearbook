@@ -7,22 +7,26 @@ import CreateAlbum from "./pages/CreateAlbum";
 import AlbumDetail from "./pages/AlbumDetail";
 import AdminDashboard from "./pages/AdminDashboard";
 import SearchResults from "./pages/SearchResults";
+import Welcome from "./pages/Welcome";
 import Layout from "./components/layout/Layout";
 
 // Placeholder components - will be replaced as we build them
-const Dashboard = () => <h1>Dashboard (Protected)</h1>;
+const Dashboard = () => <h1>Dashboard (Protected) - Home</h1>;
 
 function App() {
   return (
     <Router>
       <Routes>
-        {/* Public Routes */}
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
+        {/* Public Routes with Layout */}
+        <Route element={<Layout />}>
+          <Route path="/" element={<Welcome />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+        </Route>
 
         {/* Protected Routes */}
         <Route element={<Layout />}>
-          <Route path="/" element={<Dashboard />} />
+          <Route path="/home" element={<Dashboard />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/albums" element={<Albums />} />
           <Route path="/albums/create" element={<CreateAlbum />} />

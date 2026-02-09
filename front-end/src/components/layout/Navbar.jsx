@@ -38,7 +38,7 @@ const Navbar = () => {
                         </div>
 
                         <div className={styles.navLinks}>
-                            <Link to="/" className={styles.link}>Home</Link>
+                            <Link to="/home" className={styles.link}>Home</Link>
                             <Link to="/albums" className={styles.link}>Albums</Link>
                             <Link to="/profile" className={styles.link}>Profile</Link>
                         </div>
@@ -58,6 +58,17 @@ const Navbar = () => {
                             </Button>
                         </div>
                     </>
+                )}
+
+                {!user && (
+                    <div className={styles.navLinks}>
+                        <Link to="/login">
+                            <Button variant="ghost">Login</Button>
+                        </Link>
+                        <Link to="/register">
+                            <Button>Sign Up</Button>
+                        </Link>
+                    </div>
                 )}
             </div>
         </nav>
