@@ -1,9 +1,9 @@
 import express from "express";
-import dotenv from "dotenv";
 import cors from "cors";
 import helmet from "helmet";
-
-import connectDB from "../config/db.js";
+import dotenv from "dotenv";
+import { getPool } from "./config/database.js";
+// import studentRoutes from "./routes/students.js";
 
 dotenv.config();
 const app = express();
@@ -13,10 +13,11 @@ app.use(helmet());
 app.use(cors());
 app.use(express.json());
 
-let pool;
+app.locals.getPool = getPool;
 
 app.get("/api/test", async (req, res) => {
   try {
+    const pool = await req.app.locals.getPool();
     const result = await pool.query("SELECT COUNT(*) FROM students");
     res.json({ students: result.rows[0].count, status: "DB Connected!" });
   } catch (error) {
@@ -24,9 +25,8 @@ app.get("/api/test", async (req, res) => {
   }
 });
 
-connectDB().then((dbPool) => {
-  pool = dbPool;
-  app.listen(PORT, () => {
-    console.log("Server started on PORT:", PORT);
-  });
+// app.use("/api/students", studentRoutes);
+
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });
