@@ -3,7 +3,7 @@ import cors from "cors";
 import helmet from "helmet";
 import dotenv from "dotenv";
 import { getPool } from "./config/database.js";
-// import studentRoutes from "./routes/students.js";
+import studentRoutes from "./routes/studentRoutes.js";
 
 dotenv.config();
 const app = express();
@@ -14,6 +14,8 @@ app.use(cors());
 app.use(express.json());
 
 app.locals.getPool = getPool;
+
+app.use("/api/students", studentRoutes);
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
