@@ -3,7 +3,7 @@ import {
   getAllMemories,
   getMemoriesByStudent,
   getMemoryById,
-} from "../controllers/memoryController";
+} from "../controllers/memoryController.js";
 
 const router = express.Router();
 

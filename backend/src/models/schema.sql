@@ -47,7 +47,7 @@ CREATE TABLE images (
     uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
     UNIQUE(entity_type, entity_id, sort_order),
-    CHECK ((entity_type = 'student' AND entity_id ~ '^CSE|ECE') OR (entity_type = 'memory'))
+    CHECK ((entity_type = 'student' AND entity_id ~ '^2') OR (entity_type = 'memory'))
 );
 
 CREATE INDEX idx_students_year ON students(graduation_year);

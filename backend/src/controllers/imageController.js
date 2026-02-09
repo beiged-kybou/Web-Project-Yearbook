@@ -31,3 +31,16 @@ export async function getImagesByEntity(req, res) {
     res.status(500).json({ error: error.message });
   }
 }
+
+export async function getImageById(req, res) {
+  try {
+    const pool = await req.app.locals.getPool();
+    const { type, id } = req.params;
+    const result = await pool.query(
+      "SELECT * FROM images WHERE entity_type = $1 AND entity_id = $2",
+      [type, id],
+    );
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+}
