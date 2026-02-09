@@ -20,18 +20,8 @@ CREATE TABLE students (
     bio TEXT,
     motto TEXT,
     graduation_year INTEGER NOT NULL REFERENCES yearbooks(year),
-    password_hash VARCHAR(255),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE albums (
-    id SERIAL PRIMARY KEY,
-    title VARCHAR(255) NOT NULL,
-    description TEXT,
-    type VARCHAR(50) NOT NULL CHECK (type IN ('personal', 'group', 'batch', 'department')),
-    created_by VARCHAR(9) REFERENCES students(student_id),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE memories (
@@ -39,7 +29,6 @@ CREATE TABLE memories (
     title VARCHAR(200) NOT NULL,
     content TEXT,
     created_by VARCHAR(9) REFERENCES students(student_id),
-    album_id INTEGER REFERENCES albums(id) ON DELETE CASCADE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -58,7 +47,7 @@ CREATE TABLE images (
     uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
     UNIQUE(entity_type, entity_id, sort_order),
-    CHECK ((entity_type = 'student' AND entity_id ~ '^CSE|ECE') OR (entity_type = 'memory'))
+    CHECK ((entity_type = 'student' AND entity_id ~ '^2') OR (entity_type = 'memory'))
 );
 
 CREATE INDEX idx_students_year ON students(graduation_year);
