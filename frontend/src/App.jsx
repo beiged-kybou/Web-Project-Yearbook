@@ -1,4 +1,9 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  Navigate,
+} from "react-router-dom";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Profile from "./pages/Profile";
@@ -10,21 +15,18 @@ import SearchResults from "./pages/SearchResults";
 import Welcome from "./pages/Welcome";
 import Layout from "./components/layout/Layout";
 
-// Placeholder components - will be replaced as we build them
 const Dashboard = () => <h1>Dashboard (Protected) - Home</h1>;
 
 function App() {
   return (
     <Router>
       <Routes>
-        {/* Public Routes with Layout */}
         <Route element={<Layout />}>
           <Route path="/" element={<Welcome />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
         </Route>
 
-        {/* Protected Routes */}
         <Route element={<Layout />}>
           <Route path="/home" element={<Dashboard />} />
           <Route path="/profile" element={<Profile />} />
@@ -35,7 +37,6 @@ function App() {
           <Route path="/search" element={<SearchResults />} />
         </Route>
 
-        {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Router>
