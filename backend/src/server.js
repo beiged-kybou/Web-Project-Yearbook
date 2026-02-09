@@ -4,6 +4,7 @@ import helmet from "helmet";
 import dotenv from "dotenv";
 import { getPool } from "./config/database.js";
 import studentRoutes from "./routes/studentRoutes.js";
+import memoryRoutes from "./routes/memoryRoutes.js";
 
 dotenv.config();
 const app = express();
@@ -16,6 +17,7 @@ app.use(express.json());
 app.locals.getPool = getPool;
 
 app.use("/api/students", studentRoutes);
+app.use("/api/memories", memoryRoutes);
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
