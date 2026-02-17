@@ -65,16 +65,28 @@ CREATE TABLE images (
 
 CREATE TABLE users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  student_id VARCHAR(9) FOREIGN KEY UNIQUE REFERENCES students(student_id),
-  email UNIQUE NOT NULL,
-  password_hash TEXT NOT NULL,
-  role TEXT DEFAULT 'student',
-  created_at TIMESTAMP DEFAULT now(),
-  last_login TIMESTAMP NULL,
-)
+  google_sub TEXT UNIQUE,
+  email TEXT UNIQUE NOT NULL CHECK (email ~* '^[A-Za-z0-9._%+-]+@iut-dhaka\\.edu$'),
+  password_hash TEXT, -- To be set after OTP verification
+  display_name TEXT,
+  avatar_url TEXT,
+  role TEXT NOT NULL DEFAULT 'student' CHECK (role IN ('student', 'teacher', 'staff', 'admin')),
+  last_login TIMESTAMP,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  student_id VARCHAR(9) REFERENCES students(student_id)
+);
+
+CREATE TABLE otp_verifications (
+  email TEXT PRIMARY KEY CHECK (email ~* '^[A-Za-z0-9._%+-]+@iut-dhaka\\.edu$'),
+  otp_code TEXT NOT NULL,
+  expires_at TIMESTAMP NOT NULL,
+  attempts INTEGER DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 
 CREATE INDEX idx_students_year ON students(graduation_year);
 CREATE INDEX idx_students_name ON students(first_name, last_name);
 CREATE INDEX idx_images_entity ON images(entity_type, entity_id);
 CREATE INDEX idx_images_entity_order ON images(entity_type, entity_id, sort_order);
 CREATE INDEX idx_users_email ON users(email);
+CREATE INDEX idx_users_google_sub ON users(google_sub);
