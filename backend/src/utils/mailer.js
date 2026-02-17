@@ -1,1 +1,1 @@
-export function sendOtpMail() {}
+export async function sendOtpMail(email, otp) {}
