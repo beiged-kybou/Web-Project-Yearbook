@@ -1,3 +1,5 @@
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 CREATE TABLE yearbooks (
     year INTEGER PRIMARY KEY,
     theme VARCHAR(255),
@@ -58,10 +60,21 @@ CREATE TABLE images (
     uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
     UNIQUE(entity_type, entity_id, sort_order),
-    CHECK ((entity_type = 'student' AND entity_id ~ '^CSE|ECE') OR (entity_type = 'memory'))
+    CHECK ((entity_type = 'student') OR (entity_type = 'memory'))
 );
+
+CREATE TABLE users (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  student_id VARCHAR(9) FOREIGN KEY UNIQUE REFERENCES students(student_id),
+  email UNIQUE NOT NULL,
+  password_hash TEXT NOT NULL,
+  role TEXT DEFAULT 'student',
+  created_at TIMESTAMP DEFAULT now(),
+  last_login TIMESTAMP NULL,
+)
 
 CREATE INDEX idx_students_year ON students(graduation_year);
 CREATE INDEX idx_students_name ON students(first_name, last_name);
 CREATE INDEX idx_images_entity ON images(entity_type, entity_id);
 CREATE INDEX idx_images_entity_order ON images(entity_type, entity_id, sort_order);
+CREATE INDEX idx_users_email ON users(email);
