@@ -1,6 +1,6 @@
 export async function getAllStudents(req, res) {
   try {
-    const pool = req.app.locals.getPool();
+    const pool = await req.app.locals.getPool();
     const result = await pool.query(
       "SELECT * FROM students ORDER BY student_id ASC",
     );
@@ -12,7 +12,7 @@ export async function getAllStudents(req, res) {
 
 export async function getStudentsByYear(req, res) {
   try {
-    const pool = req.app.locals.getPool();
+    const pool = await req.app.locals.getPool();
     const { year } = req.params;
     const result = await pool.query(
       "SELECT * FROM students WHERE graduation_year = $1 ORDER BY student_id ASC",
@@ -26,7 +26,7 @@ export async function getStudentsByYear(req, res) {
 
 export async function getStudentByName(req, res) {
   try {
-    const pool = req.app.locals.getPool();
+    const pool = await req.app.locals.getPool();
     const { name } = req.query;
 
     if (!name || name.length < 2) {
@@ -60,7 +60,7 @@ export async function getStudentByName(req, res) {
 
 export async function getStudentById(req, res) {
   try {
-    const pool = req.app.locals.getPool();
+    const pool = await req.app.locals.getPool();
     const { id } = req.params;
     const result = await pool.query(
       "SELECT * FROM students WHERE student_id = $1",
@@ -74,7 +74,7 @@ export async function getStudentById(req, res) {
 
 export async function createStudent(req, res) {
   try {
-    const pool = req.app.locals.getPool();
+    const pool = await req.app.locals.getPool();
     const {
       student_id,
       first_name,
@@ -121,7 +121,7 @@ export async function createStudent(req, res) {
 
 export async function updateStudent(req, res) {
   try {
-    const pool = req.app.locals.getPool();
+    const pool = await req.app.locals.getPool();
     const { id } = req.params;
     const {
       first_name,
@@ -168,7 +168,7 @@ export async function updateStudent(req, res) {
 
 export async function deleteStudent(req, res) {
   try {
-    const pool = req.app.locals.getPool();
+    const pool = await req.app.locals.getPool();
     const { id } = req.params;
 
     const result = await pool.query(
@@ -183,11 +183,9 @@ export async function deleteStudent(req, res) {
     res.json({ message: `Student ${id} deleted successfully` });
   } catch (error) {
     if (error.code === "23503") {
-      return res
-        .status(400)
-        .json({
-          error: "Cannot delete student: they are linked to existing memories.",
-        });
+      return res.status(400).json({
+        error: "Cannot delete student: they are linked to existing memories.",
+      });
     }
     res.status(500).json({ error: error.message });
   }

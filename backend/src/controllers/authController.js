@@ -6,7 +6,7 @@ const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key"; // Should be in 
 
 export async function login(req, res) {
     try {
-        const pool = req.app.locals.getPool();
+        const pool = await req.app.locals.getPool();
         const { identifier, password } = req.body; // identifier = email or student_id
 
         // Find student by email or ID
@@ -51,7 +51,7 @@ export async function login(req, res) {
 export async function getMe(req, res) {
     try {
         // req.user is set by authMiddleware
-        const pool = req.app.locals.getPool();
+        const pool = await req.app.locals.getPool();
         const result = await pool.query(
             "SELECT * FROM students WHERE student_id = $1",
             [req.user.id]
@@ -74,7 +74,7 @@ export async function getMe(req, res) {
 export async function register(req, res) {
     // Reuse createStudent logic but add password hashing
     try {
-        const pool = req.app.locals.getPool();
+        const pool = await req.app.locals.getPool();
         const {
             student_id,
             first_name,
