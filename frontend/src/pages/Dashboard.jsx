@@ -139,7 +139,9 @@ const Dashboard = () => {
             const result = await studentService.searchStudents(query);
 
             const alreadySelected = new Set(selectedTagStudents.map((student) => student.student_id));
+            const currentStudentId = data?.user?.studentId || '';
             const filtered = (result.students || [])
+                .filter((student) => String(student.student_id) !== String(currentStudentId))
                 .filter((student) => !alreadySelected.has(student.student_id))
                 .filter((student) => isStudentAllowedForPrivacy(student))
                 .slice(0, 8);
