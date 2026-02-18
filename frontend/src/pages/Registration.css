@@ -521,3 +521,90 @@
 .auth-switch-link:hover::after {
   transform: scaleX(1);
 }
+
+/* Parsed Info Panel */
+.parsed-info-panel {
+  background: linear-gradient(135deg,
+    rgba(255, 255, 255, 0.6) 0%,
+    rgba(244, 238, 220, 0.8) 100%);
+  border: 2px dashed var(--paper-dark);
+  border-radius: 10px;
+  padding: 1.2rem;
+  margin-bottom: 1.5rem;
+  animation: scaleIn var(--transition-base) ease-out;
+}
+
+.parsed-row {
+  display: flex;
+  gap: 0.8rem;
+  margin-top: 0.8rem;
+}
+
+.parsed-badge {
+  padding: 0.6rem 1rem;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid var(--paper-dark);
+  box-shadow: var(--shadow-xs);
+  flex: 1;
+  text-align: center;
+  transition: all var(--transition-base);
+}
+
+.parsed-badge.name {
+  background: linear-gradient(135deg,
+    rgba(212, 175, 55, 0.1),
+    rgba(212, 175, 55, 0.2));
+  border-color: var(--accent-gold);
+}
+
+.parsed-badge.id {
+  border-color: var(--accent-burgundy);
+  background: rgba(139, 38, 53, 0.06);
+}
+
+.parsed-badge.batch {
+  border-color: var(--accent-forest);
+  background: rgba(85, 107, 47, 0.08);
+}
+
+.parsed-badge.dept {
+  border-color: var(--ink-brown-light);
+  background: rgba(92, 64, 51, 0.06);
+}
+
+.parsed-badge.error {
+  border-color: #dc3545;
+  background: rgba(220, 53, 69, 0.06);
+}
+
+.parsed-badge.error .badge-value {
+  color: #721c24;
+  font-size: 0.95rem;
+}
+
+.badge-label {
+  display: block;
+  font-family: var(--font-handwriting);
+  font-size: 0.85rem;
+  color: var(--ink-brown-light);
+  font-weight: 600;
+  margin-bottom: 0.2rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.badge-value {
+  display: block;
+  font-family: var(--font-casual);
+  font-size: 1.15rem;
+  color: var(--ink-black);
+  font-weight: 700;
+}
+
+@media (max-width: 768px) {
+  .parsed-row {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+}

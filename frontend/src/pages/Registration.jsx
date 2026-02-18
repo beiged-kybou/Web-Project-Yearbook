@@ -1,5 +1,7 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { authService } from '../services/api';
+import { parseStudentName } from '../utils/parseStudentName';
 import './Registration.css';
 
 const Registration = () => {
@@ -9,11 +11,17 @@ const Registration = () => {
   const [registrationToken, setRegistrationToken] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [displayName, setDisplayName] = useState('');
-  const [studentId, setStudentId] = useState('');
+  const [accountName, setAccountName] = useState('');
+  const [parsedInfo, setParsedInfo] = useState(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const handleAccountNameChange = (value) => {
+    setAccountName(value);
+    const parsed = parseStudentName(value);
+    setParsedInfo(parsed);
+  };
 
   const handleRequestOtp = async (e) => {
     e.preventDefault();
@@ -71,14 +79,23 @@ const Registration = () => {
       return;
     }
 
+    if (!parsedInfo) {
+      setError('Please enter your full account name (e.g. "John Doe 220104045")');
+      return;
+    }
+
+    if (!parsedInfo.department) {
+      setError('Could not determine department. The 5th digit of your ID must be 4 (CSE) or 5 (CEE).');
+      return;
+    }
+
     setLoading(true);
 
     try {
       const response = await authService.completeRegistration(
         registrationToken,
         password,
-        displayName,
-        studentId
+        accountName
       );
       setSuccess('Registration successful! Welcome aboard! 🎉');
       localStorage.setItem('accessToken', response.accessToken);
@@ -203,30 +220,52 @@ const Registration = () => {
           <form onSubmit={handleCompleteRegistration} className="registration-form">
             <div className="form-card">
               <h2>Complete Your Profile</h2>
-              <p className="subtitle">Just a few more details to get started</p>
+              <p className="subtitle">Enter your name exactly as it appears on your Google account</p>
 
               <div className="form-group">
-                <label>Display Name</label>
+                <label>Account Name</label>
                 <input
                   type="text"
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
-                  placeholder="John Doe"
+                  value={accountName}
+                  onChange={(e) => handleAccountNameChange(e.target.value)}
+                  placeholder="e.g. Aminul Islam 220104045"
+                  required
+                  autoFocus
                 />
-                <small className="helper-text">How you'd like to be called</small>
+                <small className="helper-text">Full name followed by your 9-digit student ID</small>
               </div>
 
-              <div className="form-group">
-                <label>Student ID (Optional)</label>
-                <input
-                  type="text"
-                  value={studentId}
-                  onChange={(e) => setStudentId(e.target.value)}
-                  placeholder="IUT123456"
-                  maxLength="9"
-                />
-                <small className="helper-text">Link to your student profile if available</small>
-              </div>
+              {/* Live-parsed info badges */}
+              {accountName.trim() && (
+                <div className="parsed-info-panel">
+                  {parsedInfo ? (
+                    <>
+                      <div className="parsed-badge name">
+                        <span className="badge-label">Name</span>
+                        <span className="badge-value">{parsedInfo.fullName}</span>
+                      </div>
+                      <div className="parsed-row">
+                        <div className="parsed-badge id">
+                          <span className="badge-label">Student ID</span>
+                          <span className="badge-value">{parsedInfo.studentId}</span>
+                        </div>
+                        <div className="parsed-badge batch">
+                          <span className="badge-label">Batch</span>
+                          <span className="badge-value">'{parsedInfo.batch}</span>
+                        </div>
+                        <div className={`parsed-badge dept ${parsedInfo.department ? '' : 'error'}`}>
+                          <span className="badge-label">Dept</span>
+                          <span className="badge-value">{parsedInfo.department || '???'}</span>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="parsed-badge error">
+                      <span className="badge-value">Enter your full name followed by a 9-digit student ID</span>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="form-group">
                 <label>Password</label>

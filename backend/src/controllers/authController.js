@@ -2,6 +2,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import otpService from "../services/otpService.js";
 import { sendOtpMail } from "../utils/mailer.js";
+import { parseStudentName } from "../utils/parseStudentName.js";
 
 export const requestOtp = async (req, res) => {
   const { email } = req.body;
@@ -93,7 +94,7 @@ export const verifyOtp = async (req, res) => {
 };
 
 export const completeRegistration = async (req, res) => {
-  const { registrationToken, password, displayName, studentId } = req.body;
+  const { registrationToken, password, accountName } = req.body;
   const pool = await req.app.locals.getPool();
 
   try {
@@ -115,54 +116,93 @@ export const completeRegistration = async (req, res) => {
       return res.status(400).json({ error: "Password must be at least 8 characters long." });
     }
 
+    // Parse account name to extract student info
+    if (!accountName || !accountName.trim()) {
+      return res.status(400).json({ error: "Account name is required." });
+    }
+
+    const parsed = parseStudentName(accountName);
+    if (!parsed) {
+      return res.status(400).json({
+        error: "Invalid account name format. Expected: 'Full Name 9-digit-StudentID' (e.g. 'John Doe 220104045').",
+      });
+    }
+
+    const { fullName, firstName, lastName, studentId, batch, department } = parsed;
+
+    if (!department) {
+      return res.status(400).json({
+        error: "Could not determine department from student ID. 5th digit must be 4 (CSE) or 5 (CEE).",
+      });
+    }
+
     // Check if user already exists
     const existingUser = await pool.query(
       "SELECT id FROM users WHERE email = $1",
-      [email]
+      [email],
     );
 
     if (existingUser.rows.length > 0) {
       return res.status(409).json({ error: "User already registered." });
     }
 
-    // If studentId provided, verify it exists in students table
-    if (studentId) {
-      const studentCheck = await pool.query(
-        "SELECT student_id FROM students WHERE student_id = $1",
-        [studentId]
-      );
+    // Check if student_id is already linked to another user
+    const studentLinkCheck = await pool.query(
+      "SELECT id FROM users WHERE student_id = $1",
+      [studentId],
+    );
 
-      if (studentCheck.rows.length === 0) {
-        return res.status(404).json({ error: "Student ID not found." });
-      }
-
-      // Check if student_id is already linked to another user
-      const studentLinkCheck = await pool.query(
-        "SELECT id FROM users WHERE student_id = $1",
-        [studentId]
-      );
-
-      if (studentLinkCheck.rows.length > 0) {
-        return res.status(409).json({ error: "Student ID already linked to another account." });
-      }
+    if (studentLinkCheck.rows.length > 0) {
+      return res.status(409).json({ error: "Student ID already linked to another account." });
     }
 
     // Hash password
     const saltRounds = 10;
     const passwordHash = await bcrypt.hash(password, saltRounds);
 
+    // Derive graduation year from batch (2-digit → 4-digit, +4 years for undergrad)
+    const batchYear = parseInt("20" + batch, 10);
+    const graduationYear = batchYear + 4;
+
+    // Ensure the department exists in the departments table
+    await pool.query(
+      `INSERT INTO departments (code, name)
+       VALUES ($1, $2)
+       ON CONFLICT (code) DO NOTHING`,
+      [department, department === "CSE" ? "Computer Science and Engineering" : "Civil and Environmental Engineering"],
+    );
+
+    // Ensure the yearbook entry exists
+    await pool.query(
+      `INSERT INTO yearbooks (year)
+       VALUES ($1)
+       ON CONFLICT (year) DO NOTHING`,
+      [graduationYear],
+    );
+
+    // Upsert student record
+    await pool.query(
+      `INSERT INTO students (student_id, first_name, last_name, email, department, graduation_year)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (student_id) DO UPDATE SET
+         email = COALESCE(EXCLUDED.email, students.email),
+         first_name = EXCLUDED.first_name,
+         last_name = EXCLUDED.last_name`,
+      [studentId, firstName, lastName, email, department, graduationYear],
+    );
+
     // Create user
     const insertQuery = `
       INSERT INTO users (email, password_hash, display_name, student_id)
       VALUES ($1, $2, $3, $4)
-      RETURNING id, email, display_name, role, created_at
+      RETURNING id, email, display_name, role, created_at, student_id
     `;
 
     const result = await pool.query(insertQuery, [
       email,
       passwordHash,
-      displayName || null,
-      studentId || null,
+      fullName,
+      studentId,
     ]);
 
     const newUser = result.rows[0];
@@ -174,7 +214,7 @@ export const completeRegistration = async (req, res) => {
     const accessToken = jwt.sign(
       { userId: newUser.id, email: newUser.email, role: newUser.role },
       process.env.JWT_SECRET,
-      { expiresIn: "7d" }
+      { expiresIn: "7d" },
     );
 
     res.status(201).json({
@@ -184,6 +224,9 @@ export const completeRegistration = async (req, res) => {
         email: newUser.email,
         displayName: newUser.display_name,
         role: newUser.role,
+        studentId: newUser.student_id,
+        batch,
+        department,
         createdAt: newUser.created_at,
       },
       accessToken,
@@ -203,10 +246,13 @@ export const login = async (req, res) => {
       return res.status(400).json({ error: "Email and password are required." });
     }
 
-    // Find user by email
+    // Find user by email, join with students to get department & batch
     const result = await pool.query(
-      `SELECT id, email, password_hash, display_name, role, avatar_url, student_id
-       FROM users WHERE email = $1`,
+      `SELECT u.id, u.email, u.password_hash, u.display_name, u.role, u.avatar_url, u.student_id,
+              s.department, s.graduation_year
+       FROM users u
+       LEFT JOIN students s ON u.student_id = s.student_id
+       WHERE u.email = $1`,
       [email],
     );
 
@@ -240,6 +286,10 @@ export const login = async (req, res) => {
       { expiresIn: "7d" },
     );
 
+    // Derive batch from graduation year
+    const batchYear = user.graduation_year ? user.graduation_year - 4 : null;
+    const batch = batchYear ? String(batchYear).slice(-2) : null;
+
     res.status(200).json({
       message: "Login successful.",
       user: {
@@ -249,6 +299,9 @@ export const login = async (req, res) => {
         role: user.role,
         avatarUrl: user.avatar_url,
         studentId: user.student_id,
+        department: user.department,
+        graduationYear: user.graduation_year,
+        batch,
       },
       accessToken,
     });

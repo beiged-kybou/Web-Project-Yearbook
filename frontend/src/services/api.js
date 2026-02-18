@@ -23,12 +23,11 @@ export const authService = {
   },
 
   // Complete Registration
-  completeRegistration: async (registrationToken, password, displayName, studentId) => {
+  completeRegistration: async (registrationToken, password, accountName) => {
     const response = await api.post('/auth/register/complete', {
       registrationToken,
       password,
-      displayName,
-      studentId: studentId || null,
+      accountName,
     });
     return response.data;
   },
@@ -36,6 +35,17 @@ export const authService = {
   // Login
   login: async (email, password) => {
     const response = await api.post('/auth/login', { email, password });
+    return response.data;
+  },
+};
+
+export const dashboardService = {
+  // Fetch dashboard data (albums & memories grouped by dept/batch)
+  getDashboard: async () => {
+    const token = localStorage.getItem('accessToken');
+    const response = await api.get('/dashboard', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
     return response.data;
   },
 };
