@@ -26,7 +26,7 @@ export async function sendOtpMail(email, otp) {
           <style>
             body {
               font-family: Arial, sans-serif;
-              line-height: 1.6;
+              line-height: 1.5;
               color: #333;
             }
             .container {
@@ -35,7 +35,7 @@ export async function sendOtpMail(email, otp) {
               padding: 20px;
             }
             .header {
-              background-color: #4CAF50;
+              background-color: #e93555;
               color: white;
               padding: 20px;
               text-align: center;
