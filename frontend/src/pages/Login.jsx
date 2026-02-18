@@ -1,27 +1,27 @@
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { authService } from '../services/api';
-import './Login.css';
+import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { authService } from "../services/api";
+import "./Login.css";
 
 const Login = () => {
   const navigate = useNavigate();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    setError('');
+    setError("");
     setLoading(true);
 
     try {
       const response = await authService.login(email, password);
-      localStorage.setItem('accessToken', response.accessToken);
-      localStorage.setItem('user', JSON.stringify(response.user));
-      navigate('/dashboard');
+      localStorage.setItem("accessToken", response.accessToken);
+      localStorage.setItem("user", JSON.stringify(response.user));
+      navigate("/dashboard");
     } catch (err) {
-      setError(err.response?.data?.error || 'Login failed. Please try again.');
+      setError(err.response?.data?.error || "Login failed. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -69,8 +69,12 @@ const Login = () => {
               />
             </div>
 
-            <button type="submit" className="primary login-btn" disabled={loading}>
-              {loading ? 'Signing in...' : 'Sign In'}
+            <button
+              type="submit"
+              className="primary login-btn"
+              disabled={loading}
+            >
+              {loading ? "Signing in..." : "Sign In"}
             </button>
 
             <div className="login-footer">
@@ -81,7 +85,7 @@ const Login = () => {
               </div>
 
               <p className="register-prompt">
-                Don't have an account?{' '}
+                Don't have an account?{" "}
                 <Link to="/register" className="register-link">
                   Create one here
                 </Link>
@@ -89,8 +93,6 @@ const Login = () => {
             </div>
           </div>
         </form>
-
-        <div className="doodle-star">*</div>
       </div>
     </div>
   );
