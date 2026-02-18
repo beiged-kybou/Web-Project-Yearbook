@@ -1,0 +1,115 @@
+.login-container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem;
+  animation: fadeIn var(--transition-slow) ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.login-page {
+  max-width: 560px;
+}
+
+.login-header {
+  text-align: center;
+  margin-bottom: 2.5rem;
+  animation: slideDown var(--transition-slow) ease-out;
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.login-form .form-card {
+  animation: scaleIn var(--transition-slow) ease-out;
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.login-btn {
+  width: 100%;
+  margin-top: 0.5rem;
+  font-size: 1.2rem;
+  padding: 1rem 2rem;
+}
+
+/* Footer / Divider */
+.login-footer {
+  margin-top: 2rem;
+}
+
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin: 1.5rem 0;
+}
+
+.divider-line {
+  flex: 1;
+  height: 2px;
+  background: linear-gradient(90deg,
+    transparent,
+    var(--paper-dark),
+    transparent
+  );
+}
+
+.divider-text {
+  font-family: var(--font-handwriting);
+  font-size: 1.3rem;
+  color: var(--ink-brown-light);
+  font-weight: 600;
+}
+
+.register-prompt {
+  text-align: center;
+  font-size: 1.1rem;
+  color: var(--ink-brown);
+}
+
+.register-link {
+  color: var(--accent-burgundy);
+  text-decoration: none;
+  font-weight: 700;
+  position: relative;
+  transition: color var(--transition-base);
+}
+
+.register-link::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: var(--accent-burgundy);
+  transform: scaleX(0);
+  transform-origin: center;
+  transition: transform var(--transition-base);
+}
+
+.register-link:hover {
+  color: var(--accent-burgundy-dark);
+}
+
+.register-link:hover::after {
+  transform: scaleX(1);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .login-page {
+    margin: 1rem;
+  }
+}

@@ -193,3 +193,67 @@ export const completeRegistration = async (req, res) => {
     res.status(500).json({ error: "Internal server error." });
   }
 };
+
+export const login = async (req, res) => {
+  const { email, password } = req.body;
+  const pool = await req.app.locals.getPool();
+
+  try {
+    if (!email || !password) {
+      return res.status(400).json({ error: "Email and password are required." });
+    }
+
+    // Find user by email
+    const result = await pool.query(
+      `SELECT id, email, password_hash, display_name, role, avatar_url, student_id
+       FROM users WHERE email = $1`,
+      [email],
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(401).json({ error: "Invalid email or password." });
+    }
+
+    const user = result.rows[0];
+
+    // Check if user has a password set
+    if (!user.password_hash) {
+      return res.status(401).json({ error: "Account not fully set up. Please complete registration." });
+    }
+
+    // Verify password
+    const isValid = await bcrypt.compare(password, user.password_hash);
+    if (!isValid) {
+      return res.status(401).json({ error: "Invalid email or password." });
+    }
+
+    // Update last_login
+    await pool.query(
+      "UPDATE users SET last_login = NOW() WHERE id = $1",
+      [user.id],
+    );
+
+    // Generate access token
+    const accessToken = jwt.sign(
+      { userId: user.id, email: user.email, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" },
+    );
+
+    res.status(200).json({
+      message: "Login successful.",
+      user: {
+        id: user.id,
+        email: user.email,
+        displayName: user.display_name,
+        role: user.role,
+        avatarUrl: user.avatar_url,
+        studentId: user.student_id,
+      },
+      accessToken,
+    });
+  } catch (error) {
+    console.error("Login Error:", error);
+    res.status(500).json({ error: "Internal server error." });
+  }
+};
