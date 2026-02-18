@@ -721,7 +721,6 @@ const MemoryCard = ({ memory, formatDate }) => (
             )}
         </div>
         <div className="memory-footer">
-            <span className="meta-author">{memory.created_by_name}</span>
             <span className="meta-date">{formatDate(memory.created_at)}</span>
         </div>
     </div>
