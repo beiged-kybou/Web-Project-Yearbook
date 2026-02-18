@@ -5,7 +5,10 @@ import { sendOtpMail } from "../utils/mailer.js";
 import { parseStudentName } from "../utils/parseStudentName.js";
 
 export const requestOtp = async (req, res) => {
-  const { email } = req.body;
+  const email = req.body.email?.trim().toLowerCase();
+  if (!email || !/^[a-z0-9._%+-]+@iut-dhaka\.edu$/i.test(email)) {
+    return res.status(400).json({ error: "A valid IUT email is required" });
+  }
   const pool = await req.app.locals.getPool();
 
   try {
@@ -98,7 +101,6 @@ export const completeRegistration = async (req, res) => {
   const pool = await req.app.locals.getPool();
 
   try {
-    // Verify registration token
     let decoded;
     try {
       decoded = jwt.verify(registrationToken, process.env.JWT_SECRET);
@@ -111,12 +113,10 @@ export const completeRegistration = async (req, res) => {
 
     const { email } = decoded;
 
-    // Validate password strength
     if (!password || password.length < 8) {
       return res.status(400).json({ error: "Password must be at least 8 characters long." });
     }
 
-    // Parse account name to extract student info
     if (!accountName || !accountName.trim()) {
       return res.status(400).json({ error: "Account name is required." });
     }
@@ -136,7 +136,6 @@ export const completeRegistration = async (req, res) => {
       });
     }
 
-    // Check if user already exists
     const existingUser = await pool.query(
       "SELECT id FROM users WHERE email = $1",
       [email],
@@ -146,7 +145,6 @@ export const completeRegistration = async (req, res) => {
       return res.status(409).json({ error: "User already registered." });
     }
 
-    // Check if student_id is already linked to another user
     const studentLinkCheck = await pool.query(
       "SELECT id FROM users WHERE student_id = $1",
       [studentId],
@@ -156,15 +154,12 @@ export const completeRegistration = async (req, res) => {
       return res.status(409).json({ error: "Student ID already linked to another account." });
     }
 
-    // Hash password
     const saltRounds = 10;
     const passwordHash = await bcrypt.hash(password, saltRounds);
 
-    // Derive graduation year from batch (2-digit → 4-digit, +4 years for undergrad)
     const batchYear = parseInt("20" + batch, 10);
     const graduationYear = batchYear + 4;
 
-    // Ensure the department exists in the departments table
     await pool.query(
       `INSERT INTO departments (code, name)
        VALUES ($1, $2)
@@ -172,7 +167,6 @@ export const completeRegistration = async (req, res) => {
       [department, department === "CSE" ? "Computer Science and Engineering" : "Civil and Environmental Engineering"],
     );
 
-    // Ensure the yearbook entry exists
     await pool.query(
       `INSERT INTO yearbooks (year)
        VALUES ($1)
@@ -180,7 +174,6 @@ export const completeRegistration = async (req, res) => {
       [graduationYear],
     );
 
-    // Upsert student record
     await pool.query(
       `INSERT INTO students (student_id, first_name, last_name, email, department, graduation_year)
        VALUES ($1, $2, $3, $4, $5, $6)
@@ -191,7 +184,6 @@ export const completeRegistration = async (req, res) => {
       [studentId, firstName, lastName, email, department, graduationYear],
     );
 
-    // Create user
     const insertQuery = `
       INSERT INTO users (email, password_hash, display_name, student_id)
       VALUES ($1, $2, $3, $4)
@@ -207,10 +199,8 @@ export const completeRegistration = async (req, res) => {
 
     const newUser = result.rows[0];
 
-    // Delete OTP verification record
     await pool.query("DELETE FROM otp_verifications WHERE email = $1", [email]);
 
-    // Generate access token
     const accessToken = jwt.sign(
       { userId: newUser.id, email: newUser.email, role: newUser.role },
       process.env.JWT_SECRET,
@@ -246,7 +236,6 @@ export const login = async (req, res) => {
       return res.status(400).json({ error: "Email and password are required." });
     }
 
-    // Find user by email, join with students to get department & batch
     const result = await pool.query(
       `SELECT u.id, u.email, u.password_hash, u.display_name, u.role, u.avatar_url, u.student_id,
               s.department, s.graduation_year
@@ -262,31 +251,26 @@ export const login = async (req, res) => {
 
     const user = result.rows[0];
 
-    // Check if user has a password set
     if (!user.password_hash) {
       return res.status(401).json({ error: "Account not fully set up. Please complete registration." });
     }
 
-    // Verify password
     const isValid = await bcrypt.compare(password, user.password_hash);
     if (!isValid) {
       return res.status(401).json({ error: "Invalid email or password." });
     }
 
-    // Update last_login
     await pool.query(
       "UPDATE users SET last_login = NOW() WHERE id = $1",
       [user.id],
     );
 
-    // Generate access token
     const accessToken = jwt.sign(
       { userId: user.id, email: user.email, role: user.role },
       process.env.JWT_SECRET,
       { expiresIn: "7d" },
     );
 
-    // Derive batch from graduation year
     const batchYear = user.graduation_year ? user.graduation_year - 4 : null;
     const batch = batchYear ? String(batchYear).slice(-2) : null;
 

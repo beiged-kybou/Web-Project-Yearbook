@@ -90,8 +90,7 @@ const Login = () => {
           </div>
         </form>
 
-        <div className="doodle-star">★</div>
-        <div className="doodle-heart">♥</div>
+        <div className="doodle-star">*</div>
       </div>
     </div>
   );

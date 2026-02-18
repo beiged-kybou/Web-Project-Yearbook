@@ -67,7 +67,7 @@ CREATE TABLE users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   google_sub TEXT UNIQUE,
   email TEXT UNIQUE NOT NULL CHECK (email ~* '^[A-Za-z0-9._%+-]+@iut-dhaka\\.edu$'),
-  password_hash TEXT, -- To be set after OTP verification
+  password_hash TEXT,
   display_name TEXT,
   avatar_url TEXT,
   role TEXT NOT NULL DEFAULT 'student' CHECK (role IN ('student', 'teacher', 'staff', 'admin')),

@@ -1,9 +1,5 @@
 import jwt from "jsonwebtoken";
 
-/**
- * Express middleware that verifies a Bearer JWT from the Authorization header
- * and attaches the decoded payload to `req.user`.
- */
 export const authenticate = (req, res, next) => {
   const authHeader = req.headers.authorization;
 

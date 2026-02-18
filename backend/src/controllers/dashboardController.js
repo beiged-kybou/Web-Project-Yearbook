@@ -1,19 +1,8 @@
-/**
- * Dashboard controller
- *
- * Returns memories & albums visible to the logged-in user, grouped by:
- *   - their department  (e.g. all CSE albums/memories)
- *   - their batch       (e.g. all batch '22 albums/memories)
- *
- * The user's department & batch are derived from their linked student record.
- */
-
 export const getDashboard = async (req, res) => {
   const pool = await req.app.locals.getPool();
   const { userId } = req.user;
 
   try {
-    // 1. Look up the user's student record to get department & graduation_year
     const userResult = await pool.query(
       `SELECT u.id, u.display_name, u.email, u.student_id, u.role, u.avatar_url,
               s.department, s.graduation_year, s.first_name, s.last_name
@@ -30,11 +19,9 @@ export const getDashboard = async (req, res) => {
     const user = userResult.rows[0];
     const { department, graduation_year } = user;
 
-    // Derive batch label from graduation_year (graduation_year - 4 → 2-digit)
     const batchYear = graduation_year ? graduation_year - 4 : null;
     const batch = batchYear ? String(batchYear).slice(-2) : null;
 
-    // 2. Fetch department albums & their memories
     const deptAlbumsResult = await pool.query(
       `SELECT a.id, a.title, a.description, a.type, a.created_at,
               s.first_name || ' ' || s.last_name AS created_by_name,
@@ -50,7 +37,6 @@ export const getDashboard = async (req, res) => {
       [department],
     );
 
-    // 3. Fetch batch albums & their memories
     const batchAlbumsResult = await pool.query(
       `SELECT a.id, a.title, a.description, a.type, a.created_at,
               s.first_name || ' ' || s.last_name AS created_by_name,
@@ -66,10 +52,21 @@ export const getDashboard = async (req, res) => {
       [graduation_year],
     );
 
-    // Collect all album IDs to fetch their memories in one query
+    const publicAlbumsResult = await pool.query(
+      `SELECT a.id, a.title, a.description, a.type, a.created_at,
+              s.first_name || ' ' || s.last_name AS created_by_name,
+              s.student_id AS created_by_id
+       FROM albums a
+       LEFT JOIN students s ON a.created_by = s.student_id
+       WHERE a.type = 'group'
+       ORDER BY a.created_at DESC
+       LIMIT 20`,
+    );
+
     const allAlbumIds = [
       ...deptAlbumsResult.rows.map((a) => a.id),
       ...batchAlbumsResult.rows.map((a) => a.id),
+      ...publicAlbumsResult.rows.map((a) => a.id),
     ];
 
     let memoriesByAlbum = {};
@@ -82,7 +79,21 @@ export const getDashboard = async (req, res) => {
                                  ORDER BY i.sort_order)
                  FROM images i
                  WHERE i.entity_type = 'memory' AND i.entity_id = m.id::text
-                ) AS images
+                ) AS images,
+                (SELECT json_agg(
+                          json_build_object(
+                            'student_id', ts.student_id,
+                            'first_name', ts.first_name,
+                            'last_name', ts.last_name,
+                            'department', ts.department,
+                            'graduation_year', ts.graduation_year,
+                            'photo_url', ts.photo_url
+                          )
+                        )
+                 FROM memory_participants mp
+                 JOIN students ts ON mp.student_id = ts.student_id
+                 WHERE mp.memory_id = m.id
+                ) AS tagged_students
          FROM memories m
          LEFT JOIN students s ON m.created_by = s.student_id
          WHERE m.album_id = ANY($1)
@@ -98,7 +109,6 @@ export const getDashboard = async (req, res) => {
       }
     }
 
-    // 4. Fetch recent standalone memories from same department (no album)
     const deptMemoriesResult = await pool.query(
       `SELECT m.id, m.title, m.content, m.album_id, m.created_at,
               s.first_name || ' ' || s.last_name AS created_by_name,
@@ -107,7 +117,21 @@ export const getDashboard = async (req, res) => {
                                ORDER BY i.sort_order)
                FROM images i
                WHERE i.entity_type = 'memory' AND i.entity_id = m.id::text
-              ) AS images
+              ) AS images,
+              (SELECT json_agg(
+                        json_build_object(
+                          'student_id', ts.student_id,
+                          'first_name', ts.first_name,
+                          'last_name', ts.last_name,
+                          'department', ts.department,
+                          'graduation_year', ts.graduation_year,
+                          'photo_url', ts.photo_url
+                        )
+                      )
+               FROM memory_participants mp
+               JOIN students ts ON mp.student_id = ts.student_id
+               WHERE mp.memory_id = m.id
+              ) AS tagged_students
        FROM memories m
        LEFT JOIN students s ON m.created_by = s.student_id
        WHERE m.album_id IS NULL
@@ -119,7 +143,6 @@ export const getDashboard = async (req, res) => {
       [department],
     );
 
-    // 5. Fetch recent standalone memories from same batch (no album)
     const batchMemoriesResult = await pool.query(
       `SELECT m.id, m.title, m.content, m.album_id, m.created_at,
               s.first_name || ' ' || s.last_name AS created_by_name,
@@ -128,7 +151,21 @@ export const getDashboard = async (req, res) => {
                                ORDER BY i.sort_order)
                FROM images i
                WHERE i.entity_type = 'memory' AND i.entity_id = m.id::text
-              ) AS images
+              ) AS images,
+              (SELECT json_agg(
+                        json_build_object(
+                          'student_id', ts.student_id,
+                          'first_name', ts.first_name,
+                          'last_name', ts.last_name,
+                          'department', ts.department,
+                          'graduation_year', ts.graduation_year,
+                          'photo_url', ts.photo_url
+                        )
+                      )
+               FROM memory_participants mp
+               JOIN students ts ON mp.student_id = ts.student_id
+               WHERE mp.memory_id = m.id
+              ) AS tagged_students
        FROM memories m
        LEFT JOIN students s ON m.created_by = s.student_id
        WHERE m.album_id IS NULL
@@ -140,7 +177,36 @@ export const getDashboard = async (req, res) => {
       [graduation_year],
     );
 
-    // Attach memories to albums
+    const publicMemoriesResult = await pool.query(
+      `SELECT m.id, m.title, m.content, m.album_id, m.created_at,
+              s.first_name || ' ' || s.last_name AS created_by_name,
+              s.student_id AS created_by_id,
+              (SELECT json_agg(json_build_object('id', i.id, 'url', i.photo_url, 'sort', i.sort_order)
+                               ORDER BY i.sort_order)
+               FROM images i
+               WHERE i.entity_type = 'memory' AND i.entity_id = m.id::text
+              ) AS images,
+              (SELECT json_agg(
+                        json_build_object(
+                          'student_id', ts.student_id,
+                          'first_name', ts.first_name,
+                          'last_name', ts.last_name,
+                          'department', ts.department,
+                          'graduation_year', ts.graduation_year,
+                          'photo_url', ts.photo_url
+                        )
+                      )
+               FROM memory_participants mp
+               JOIN students ts ON mp.student_id = ts.student_id
+               WHERE mp.memory_id = m.id
+              ) AS tagged_students
+       FROM memories m
+       LEFT JOIN students s ON m.created_by = s.student_id
+       WHERE m.album_id IS NULL
+       ORDER BY m.created_at DESC
+       LIMIT 20`,
+    );
+
     const attachMemories = (albums) =>
       albums.map((album) => ({
         ...album,
@@ -171,6 +237,11 @@ export const getDashboard = async (req, res) => {
         label: batch ? `'${batch}` : null,
         albums: attachMemories(batchAlbumsResult.rows),
         memories: batchMemoriesResult.rows,
+      },
+      public: {
+        label: "Public",
+        albums: attachMemories(publicAlbumsResult.rows),
+        memories: publicMemoriesResult.rows,
       },
     });
   } catch (error) {

@@ -4,8 +4,8 @@
  * Convention:  "Firstname Middlename... Lastname STUDENTID"
  *   - The last word is the 9-digit student ID.
  *   - Everything before it is the full name.
- *   - First 2 digits of the ID → batch  (e.g. 22 → batch '22)
- *   - 5th digit of the ID → department  (4 → CSE, 5 → CEE)
+ *   - First 2 digits of the ID -> batch  (e.g. 22 -> batch '22)
+ *   - 5th digit of the ID -> department  (4 -> CSE, 5 -> CEE)
  *
  * @param {string} nameString - The raw name string from the account.
  * @returns {{ fullName: string, firstName: string, lastName: string,

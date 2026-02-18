@@ -97,7 +97,7 @@ const Registration = () => {
         password,
         accountName
       );
-      setSuccess('Registration successful! Welcome aboard! 🎉');
+      setSuccess('Registration successful! Welcome aboard!');
       localStorage.setItem('accessToken', response.accessToken);
       localStorage.setItem('user', JSON.stringify(response.user));
       setTimeout(() => {
@@ -122,7 +122,7 @@ const Registration = () => {
         <div className="registration-header">
           <h1 className="yearbook-title">IUT Yearbook</h1>
           <div className="handwritten-note">
-            Join us in preserving memories! 📸✨
+            Join us in preserving memories!
           </div>
         </div>
 
@@ -185,7 +185,7 @@ const Registration = () => {
                   type="text"
                   value={otp}
                   onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  placeholder="Enter 6-digit code"
+                  placeholder="Code"
                   required
                   maxLength="6"
                   className="otp-input"
@@ -195,7 +195,7 @@ const Registration = () => {
 
               <div className="button-group">
                 <button type="button" onClick={() => setStep(1)} disabled={loading}>
-                  ← Back
+                  Back
                 </button>
                 <button type="submit" className="primary" disabled={loading || otp.length !== 6}>
                   {loading ? 'Verifying...' : 'Verify Code'}
@@ -228,14 +228,13 @@ const Registration = () => {
                   type="text"
                   value={accountName}
                   onChange={(e) => handleAccountNameChange(e.target.value)}
-                  placeholder="e.g. Aminul Islam 220104045"
+                  placeholder="e.g. Mubtasim Sajid Ahmed 220041243"
                   required
                   autoFocus
                 />
                 <small className="helper-text">Full name followed by your 9-digit student ID</small>
               </div>
 
-              {/* Live-parsed info badges */}
               {accountName.trim() && (
                 <div className="parsed-info-panel">
                   {parsedInfo ? (
@@ -293,10 +292,10 @@ const Registration = () => {
 
               <div className="button-group">
                 <button type="button" onClick={() => setStep(2)} disabled={loading}>
-                  ← Back
+                  Back
                 </button>
                 <button type="submit" className="primary" disabled={loading}>
-                  {loading ? 'Creating Account...' : 'Complete Registration 🎉'}
+                  {loading ? 'Creating Account...' : 'Complete Registration'}
                 </button>
               </div>
             </div>
@@ -309,8 +308,7 @@ const Registration = () => {
           <p>Already have an account? <Link to="/login" className="auth-switch-link">Sign in</Link></p>
         </div>
 
-        <div className="doodle-star">★</div>
-        <div className="doodle-heart">♥</div>
+        <div className="doodle-star">*</div>
       </div>
     </div>
   );
