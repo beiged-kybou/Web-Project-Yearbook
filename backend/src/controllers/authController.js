@@ -1,6 +1,7 @@
+import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import otpService from "../services/otpService";
-import { sendOtpMail } from "../utils/mailer";
+import otpService from "../services/otpService.js";
+import { sendOtpMail } from "../utils/mailer.js";
 
 export const requestOtp = async (req, res) => {
   const { email } = req.body;
@@ -35,12 +36,13 @@ export const requestOtp = async (req, res) => {
     res.status(200).json({ message: "Verification code sent to mail" });
   } catch (error) {
     console.log("Error in requesting OTP", error);
-    return req.status(500).json({ error: "Error requesting OTP" });
+    return res.status(500).json({ error: "Error requesting OTP" });
   }
 };
 
 export const verifyOtp = async (req, res) => {
   const { email, otp } = req.body;
+  const pool = await req.app.locals.getPool();
 
   try {
     const result = await pool.query(
@@ -86,6 +88,108 @@ export const verifyOtp = async (req, res) => {
     });
   } catch (error) {
     console.error("Verify OTP Error:", error);
+    res.status(500).json({ error: "Internal server error." });
+  }
+};
+
+export const completeRegistration = async (req, res) => {
+  const { registrationToken, password, displayName, studentId } = req.body;
+  const pool = await req.app.locals.getPool();
+
+  try {
+    // Verify registration token
+    let decoded;
+    try {
+      decoded = jwt.verify(registrationToken, process.env.JWT_SECRET);
+      if (decoded.purpose !== "registration") {
+        return res.status(400).json({ error: "Invalid token purpose." });
+      }
+    } catch (error) {
+      return res.status(401).json({ error: "Invalid or expired token." });
+    }
+
+    const { email } = decoded;
+
+    // Validate password strength
+    if (!password || password.length < 8) {
+      return res.status(400).json({ error: "Password must be at least 8 characters long." });
+    }
+
+    // Check if user already exists
+    const existingUser = await pool.query(
+      "SELECT id FROM users WHERE email = $1",
+      [email]
+    );
+
+    if (existingUser.rows.length > 0) {
+      return res.status(409).json({ error: "User already registered." });
+    }
+
+    // If studentId provided, verify it exists in students table
+    if (studentId) {
+      const studentCheck = await pool.query(
+        "SELECT student_id FROM students WHERE student_id = $1",
+        [studentId]
+      );
+
+      if (studentCheck.rows.length === 0) {
+        return res.status(404).json({ error: "Student ID not found." });
+      }
+
+      // Check if student_id is already linked to another user
+      const studentLinkCheck = await pool.query(
+        "SELECT id FROM users WHERE student_id = $1",
+        [studentId]
+      );
+
+      if (studentLinkCheck.rows.length > 0) {
+        return res.status(409).json({ error: "Student ID already linked to another account." });
+      }
+    }
+
+    // Hash password
+    const saltRounds = 10;
+    const passwordHash = await bcrypt.hash(password, saltRounds);
+
+    // Create user
+    const insertQuery = `
+      INSERT INTO users (email, password_hash, display_name, student_id)
+      VALUES ($1, $2, $3, $4)
+      RETURNING id, email, display_name, role, created_at
+    `;
+
+    const result = await pool.query(insertQuery, [
+      email,
+      passwordHash,
+      displayName || null,
+      studentId || null,
+    ]);
+
+    const newUser = result.rows[0];
+
+    // Delete OTP verification record
+    await pool.query("DELETE FROM otp_verifications WHERE email = $1", [email]);
+
+    // Generate access token
+    const accessToken = jwt.sign(
+      { userId: newUser.id, email: newUser.email, role: newUser.role },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" }
+    );
+
+    res.status(201).json({
+      message: "Registration completed successfully.",
+      user: {
+        id: newUser.id,
+        email: newUser.email,
+        displayName: newUser.display_name,
+        role: newUser.role,
+        createdAt: newUser.created_at,
+      },
+      accessToken,
+    });
+  } catch (error) {
+    console.error("Complete Registration Error:", error);
     res.status(500).json({ error: "Internal server error." });
   }
 };

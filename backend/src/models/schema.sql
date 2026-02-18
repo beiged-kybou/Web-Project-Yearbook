@@ -78,7 +78,7 @@ CREATE TABLE users (
 
 CREATE TABLE otp_verifications (
   email TEXT PRIMARY KEY CHECK (email ~* '^[A-Za-z0-9._%+-]+@iut-dhaka\\.edu$'),
-  otp_code TEXT NOT NULL,
+  otp_hash TEXT NOT NULL,
   expires_at TIMESTAMP NOT NULL,
   attempts INTEGER DEFAULT 0,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP

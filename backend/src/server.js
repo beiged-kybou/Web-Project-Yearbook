@@ -1,10 +1,11 @@
-import express from "express";
 import cors from "cors";
-import helmet from "helmet";
 import dotenv from "dotenv";
+import express from "express";
+import helmet from "helmet";
 import { getPool } from "./config/database.js";
-import studentRoutes from "./routes/studentRoutes.js";
+import authRoutes from "./routes/authRoutes.js";
 import memoryRoutes from "./routes/memoryRoutes.js";
+import studentRoutes from "./routes/studentRoutes.js";
 
 dotenv.config();
 const app = express();
@@ -16,6 +17,7 @@ app.use(express.json());
 
 app.locals.getPool = getPool;
 
+app.use("/api/auth", authRoutes);
 app.use("/api/students", studentRoutes);
 app.use("/api/memories", memoryRoutes);
 
