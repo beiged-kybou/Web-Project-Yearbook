@@ -1,49 +1,32 @@
-const orderedTables = [
-  "tag_notifications",
-  "memory_participants",
-  "images",
-  "memories",
-  "albums",
-  "club_members",
-  "users",
-  "students",
-  "otp_verifications",
+import User from "../../backend/src/models/User.js";
+import Student from "../../backend/src/models/Student.js";
+import OtpVerification from "../../backend/src/models/OtpVerification.js";
+import Club from "../../backend/src/models/Club.js";
+import Memory from "../../backend/src/models/Memory.js";
+import TagNotification from "../../backend/src/models/TagNotification.js";
+import ActivityNotification from "../../backend/src/models/ActivityNotification.js";
+import Yearbook from "../../backend/src/models/Yearbook.js";
+import Department from "../../backend/src/models/Department.js";
+
+const models = [
+  TagNotification,
+  ActivityNotification,
+  Memory,
+  User,
+  Student,
+  OtpVerification,
+  Club,
+  Yearbook,
+  Department
 ];
 
-async function tableExists(pool, tableName) {
-  const { rows } = await pool.query("SELECT to_regclass($1) AS oid", [
-    `public.${tableName}`,
-  ]);
-  return Boolean(rows[0]?.oid);
-}
-
-export async function wipeUsers(pool) {
-  await pool.query("BEGIN");
-
+export async function wipeUsers() {
   try {
-    const stats = [];
-    for (const table of orderedTables) {
-      const exists = await tableExists(pool, table);
-      if (!exists) {
-        stats.push({ table, skipped: true });
-        continue;
-      }
-
-      const result = await pool.query(`DELETE FROM ${table}`);
-      stats.push({ table, count: result.rowCount });
-    }
-
-    await pool.query("COMMIT");
-
-    for (const entry of stats) {
-      if (entry.skipped) {
-        console.log(` - ${entry.table}: skipped (table not found)`);
-      } else {
-        console.log(` - ${entry.table}: ${entry.count} rows removed`);
-      }
+    for (const model of models) {
+      const result = await model.deleteMany({});
+      console.log(` - ${model.modelName}: ${result.deletedCount} documents removed`);
     }
   } catch (error) {
-    await pool.query("ROLLBACK");
     throw error;
   }
 }

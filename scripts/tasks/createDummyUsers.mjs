@@ -1,4 +1,8 @@
 import bcrypt from "bcryptjs";
+import Department from "../../backend/src/models/Department.js";
+import Yearbook from "../../backend/src/models/Yearbook.js";
+import Student from "../../backend/src/models/Student.js";
+import User from "../../backend/src/models/User.js";
 
 const DEFAULT_PASSWORD = process.env.DUMMY_PASSWORD || "passcode123";
 
@@ -82,81 +86,67 @@ const clubAdmins = CLUBS.map((club, index) => {
 
 const USERS = [...ROOT_ADMINS, ...departmentAdmins, ...clubAdmins];
 
-async function ensureDepartment(pool, code, name) {
-  await pool.query(
-    `INSERT INTO departments (code, name)
-     VALUES ($1, $2)
-     ON CONFLICT (code) DO NOTHING`,
-    [code, name],
+async function ensureDepartment(code, name) {
+  await Department.findOneAndUpdate(
+    { code },
+    { name },
+    { upsert: true, new: true }
   );
 }
 
-async function ensureYearbook(pool, year) {
-  await pool.query(
-    `INSERT INTO yearbooks (year)
-     VALUES ($1)
-     ON CONFLICT (year) DO NOTHING`,
-    [year],
+async function ensureYearbook(year) {
+  await Yearbook.findOneAndUpdate(
+    { year },
+    {},
+    { upsert: true, new: true }
   );
 }
 
-async function upsertStudent(pool, user) {
-  await pool.query(
-    `INSERT INTO students (student_id, first_name, last_name, email, department, graduation_year)
-     VALUES ($1, $2, $3, $4, $5, $6)
-     ON CONFLICT (student_id) DO UPDATE SET
-       first_name = EXCLUDED.first_name,
-       last_name = EXCLUDED.last_name,
-       email = EXCLUDED.email,
-       department = EXCLUDED.department,
-       graduation_year = EXCLUDED.graduation_year`,
-    [
-      user.studentId,
-      user.firstName,
-      user.lastName,
-      user.email,
-      user.department,
-      user.graduationYear,
-    ],
+async function upsertStudent(user) {
+  await Student.findOneAndUpdate(
+    { studentId: user.studentId },
+    {
+      firstName: user.firstName,
+      lastName: user.lastName,
+      email: user.email,
+      department: user.department,
+      graduationYear: user.graduationYear,
+    },
+    { upsert: true, new: true }
   );
 }
 
-async function upsertUser(pool, user) {
+async function upsertUser(user) {
   const passwordHash = await bcrypt.hash(DEFAULT_PASSWORD, 10);
-  await pool.query(
-    `INSERT INTO users (email, password_hash, display_name, student_id, role)
-     VALUES ($1, $2, $3, $4, $5)
-     ON CONFLICT (email) DO UPDATE SET
-       password_hash = EXCLUDED.password_hash,
-       display_name = EXCLUDED.display_name,
-       student_id = EXCLUDED.student_id,
-       role = EXCLUDED.role`,
-    [user.email, passwordHash, user.displayName, user.studentId, user.role || "student"],
+  await User.findOneAndUpdate(
+    { email: user.email },
+    {
+      passwordHash,
+      displayName: user.displayName,
+      studentId: user.studentId,
+      role: user.role || "student",
+    },
+    { upsert: true, new: true }
   );
 }
 
-export async function createDummyUsers(pool) {
-  await pool.query("BEGIN");
-
+export async function createDummyUsers() {
   try {
     for (const dept of DEPARTMENTS) {
-      await ensureDepartment(pool, dept.code, dept.name);
+      await ensureDepartment(dept.code, dept.name);
     }
 
     const years = new Set(USERS.map((user) => user.graduationYear));
     for (const year of years) {
-      await ensureYearbook(pool, year);
+      await ensureYearbook(year);
     }
 
     for (const user of USERS) {
-      await upsertStudent(pool, user);
-      await upsertUser(pool, user);
+      await upsertStudent(user);
+      await upsertUser(user);
       console.log(` - ensured ${user.email}`);
     }
-
-    await pool.query("COMMIT");
   } catch (error) {
-    await pool.query("ROLLBACK");
     throw error;
   }
 }
