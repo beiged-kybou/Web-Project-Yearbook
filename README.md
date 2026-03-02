@@ -23,7 +23,7 @@ This is a full-stack web application developed as a student project. It aims to 
 
 ## 🛠️ Tech Stack
 - **Frontend:** React 18 (Vite), React Router, Axios, CSS Modules.
-- **Backend:** Node.js (Express), PostgreSQL (`pg`), JWT Authentication.
+- **Backend:** Node.js (Express), MongoDB (`mongoose`), JWT Authentication.
 - **Media & Email:** Cloudinary (Image storage), Nodemailer (OTP delivery).
 - **Environment:** ES Modules throughout.
 
@@ -31,7 +31,7 @@ This is a full-stack web application developed as a student project. It aims to 
 
 ### Prerequisites
 - **Node.js:** v18 or higher
-- **Database:** PostgreSQL instance
+- **Database:** MongoDB instance (Local or Atlas)
 - **Storage:** Cloudinary account (Free tier works)
 - **Email:** SMTP server (e.g., Gmail App Password)
 
