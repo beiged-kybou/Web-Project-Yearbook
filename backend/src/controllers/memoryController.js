@@ -103,8 +103,12 @@ export const createMemory = async (req, res) => {
   const headline = req.body.headline?.trim();
   const caption = req.body.caption?.trim();
   const privacy = (req.body.privacy || "public").trim().toLowerCase();
-  const imageUrls = normalizeStringArray(req.body.imageUrls).filter(isLikelyUrl);
-  const taggedStudentIds = [...new Set(normalizeStringArray(req.body.taggedStudentIds))];
+  const imageUrls = normalizeStringArray(req.body.imageUrls).filter(
+    isLikelyUrl,
+  );
+  const taggedStudentIds = [
+    ...new Set(normalizeStringArray(req.body.taggedStudentIds)),
+  ];
 
   if (!headline) {
     return res.status(400).json({ error: "Headline is required." });
@@ -115,7 +119,11 @@ export const createMemory = async (req, res) => {
   }
 
   if (!Object.keys(PRIVACY_CONFIG).includes(privacy)) {
-    return res.status(400).json({ error: "Invalid privacy. Use department, batch, or public." });
+    return res
+      .status(400)
+      .json({
+        error: "Invalid privacy. Use department, batch, club, or public.",
+      });
   }
 
   if (
@@ -124,7 +132,8 @@ export const createMemory = async (req, res) => {
     !process.env.CLOUDINARY_API_SECRET
   ) {
     return res.status(500).json({
-      error: "Cloudinary is not configured. Please set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET.",
+      error:
+        "Cloudinary is not configured. Please set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET.",
     });
   }
 
@@ -147,15 +156,21 @@ export const createMemory = async (req, res) => {
     if (!creatorStudentId) {
       return res
         .status(400)
-        .json({ error: "Your account is not linked to a student profile yet." });
+        .json({
+          error: "Your account is not linked to a student profile yet.",
+        });
     }
 
     if (privacy === "department" && !creator.department) {
-      return res.status(400).json({ error: "No department found for your profile." });
+      return res
+        .status(400)
+        .json({ error: "No department found for your profile." });
     }
 
     if (privacy === "batch" && !creator.graduation_year) {
-      return res.status(400).json({ error: "No batch found for your profile." });
+      return res
+        .status(400)
+        .json({ error: "No batch found for your profile." });
     }
 
     const privacyConfig = PRIVACY_CONFIG[privacy];
@@ -176,7 +191,12 @@ export const createMemory = async (req, res) => {
         `INSERT INTO albums (title, description, type, created_by)
          VALUES ($1, $2, $3, $4)
          RETURNING id`,
-        [privacyConfig.title, privacyConfig.description, privacyConfig.albumType, creatorStudentId],
+        [
+          privacyConfig.title,
+          privacyConfig.description,
+          privacyConfig.albumType,
+          creatorStudentId,
+        ],
       );
       albumId = albumInsertResult.rows[0].id;
     }
@@ -206,7 +226,9 @@ export const createMemory = async (req, res) => {
       );
     }
 
-    const cleanTagIds = taggedStudentIds.filter((studentId) => studentId !== creatorStudentId);
+    const cleanTagIds = taggedStudentIds.filter(
+      (studentId) => studentId !== creatorStudentId,
+    );
 
     let existingTaggedRows = [];
     if (cleanTagIds.length > 0) {

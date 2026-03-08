@@ -45,6 +45,34 @@ export const dashboardService = {
   },
 };
 
+export const clubService = {
+  listClubs: async () => {
+    const response = await api.get('/clubs');
+    return response.data;
+  },
+  myClubs: async () => {
+    const token = localStorage.getItem('accessToken');
+    const response = await api.get('/clubs/me', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  join: async (clubCode) => {
+    const token = localStorage.getItem('accessToken');
+    const response = await api.post(`/clubs/${clubCode}/join`, null, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  leave: async (clubCode) => {
+    const token = localStorage.getItem('accessToken');
+    const response = await api.delete(`/clubs/${clubCode}/leave`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+};
+
 export const memoryService = {
   createMemory: async ({ headline, caption, imageUrls, taggedStudentIds, privacy, files }) => {
     const token = localStorage.getItem('accessToken');

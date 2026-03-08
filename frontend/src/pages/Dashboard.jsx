@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { dashboardService, memoryService, studentService } from '../services/api';
+import { clubService, dashboardService, memoryService, studentService } from '../services/api';
 import './Dashboard.css';
 
 const Dashboard = () => {
@@ -23,6 +23,10 @@ const Dashboard = () => {
     const [postSuccess, setPostSuccess] = useState('');
     const [showPostModal, setShowPostModal] = useState(false);
     const [showProfileModal, setShowProfileModal] = useState(false);
+    const [clubs, setClubs] = useState([]);
+    const [myClubCodes, setMyClubCodes] = useState(new Set());
+    const [clubLoading, setClubLoading] = useState(true);
+    const [clubError, setClubError] = useState('');
     const [profileLoading, setProfileLoading] = useState(false);
     const [profileSaving, setProfileSaving] = useState(false);
     const [profileError, setProfileError] = useState('');
@@ -38,6 +42,7 @@ const Dashboard = () => {
             return;
         }
         fetchDashboard();
+        fetchClubs();
     }, []);
 
     const fetchDashboard = async () => {
@@ -691,6 +696,59 @@ const Dashboard = () => {
                         </>
                     )}
                 </div>
+
+                <section className="scrapbook-page clubs-section">
+                    <div className="corner-pin top-left"></div>
+                    <div className="corner-pin top-right"></div>
+                    <div className="corner-pin bottom-left"></div>
+                    <div className="corner-pin bottom-right"></div>
+
+                    <header className="clubs-header">
+                        <div>
+                            <h3>IUT Clubs</h3>
+                            <p className="clubs-subtitle">Choose the communities that match your passions.</p>
+                        </div>
+                        <button className="refresh-clubs" onClick={fetchClubs} disabled={clubLoading}>
+                            {clubLoading ? 'Refreshing...' : 'Refresh'}
+                        </button>
+                    </header>
+
+                    {clubError && <div className="error-message">{clubError}</div>}
+
+                    <div className="clubs-grid">
+                        {clubLoading && clubs.length === 0 && <p className="loading-text">Loading clubs...</p>}
+                        {!clubLoading && clubs.length === 0 && <p className="empty-text">No clubs available right now.</p>}
+
+                        {clubs.map((club) => {
+                            const isMember = myClubCodes.has(club.code);
+                            return (
+                                <article key={club.id} className={`club-card ${isMember ? 'club-card--member' : ''}`}>
+                                    <div className="club-card-body">
+                                        <div className="club-code">{club.code}</div>
+                                        <h4 className="club-name">{club.name}</h4>
+                                        <p className="club-description">{club.description}</p>
+                                    </div>
+                                    <footer className="club-card-footer">
+                                        <div className="club-membership">
+                                            <span className="club-members-label">Members</span>
+                                            <span className="club-members-count">
+                                                {club.members?.count ?? 0}
+                                            </span>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            className={`club-action ${isMember ? 'leave' : 'join'}`}
+                                            onClick={() => toggleClub(club.code, isMember)}
+                                            disabled={clubLoading}
+                                        >
+                                            {isMember ? 'Leave' : 'Join'}
+                                        </button>
+                                    </footer>
+                                </article>
+                            );
+                        })}
+                    </div>
+                </section>
             </main>
         </div>
     );
@@ -755,3 +813,40 @@ const PrivacyMemoryCollection = ({ title, memories, formatDate }) => (
 );
 
 export default Dashboard;
+    const fetchClubs = async () => {
+        setClubError('');
+        try {
+            setClubLoading(true);
+            const [clubList, myClubsResult] = await Promise.all([
+                clubService.listClubs(),
+                clubService.myClubs().catch(() => ({ clubs: [] })),
+            ]);
+
+            setClubs(clubList.clubs || []);
+            setMyClubCodes(new Set((myClubsResult.clubs || []).map((club) => club.code)));
+        } catch (err) {
+            setClubError(err.response?.data?.error || 'Failed to load clubs.');
+        } finally {
+            setClubLoading(false);
+        }
+    };
+
+    const toggleClub = async (clubCode, isMember) => {
+        if (!clubCode) return;
+        try {
+            setClubError('');
+            if (isMember) {
+                await clubService.leave(clubCode);
+                setMyClubCodes((prev) => {
+                    const next = new Set(prev);
+                    next.delete(clubCode);
+                    return next;
+                });
+            } else {
+                await clubService.join(clubCode);
+                setMyClubCodes((prev) => new Set(prev).add(clubCode));
+            }
+        } catch (err) {
+            setClubError(err.response?.data?.error || 'Club action failed.');
+        }
+    };

@@ -18,11 +18,11 @@ const router = express.Router();
 router.get("/me/profile", authenticate, getMyProfile);
 router.put("/me/profile", authenticate, memoryUpload.single("displayPhotoFile"), updateMyProfile);
 router.get("/", getAllStudents);
-router.post("/", createStudent);
 router.get("/search", getStudentByName);
 router.get("/year/:year", getStudentsByYear);
 router.get("/:id", getStudentById);
 router.delete("/:id", deleteStudent);
 router.put("/:id", updateStudent);
+router.post("/", createStudent);
 
 export default router;

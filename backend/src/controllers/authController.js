@@ -114,7 +114,9 @@ export const completeRegistration = async (req, res) => {
     const { email } = decoded;
 
     if (!password || password.length < 8) {
-      return res.status(400).json({ error: "Password must be at least 8 characters long." });
+      return res
+        .status(400)
+        .json({ error: "Password must be at least 8 characters long." });
     }
 
     if (!accountName || !accountName.trim()) {
@@ -124,15 +126,18 @@ export const completeRegistration = async (req, res) => {
     const parsed = parseStudentName(accountName);
     if (!parsed) {
       return res.status(400).json({
-        error: "Invalid account name format. Expected: 'Full Name 9-digit-StudentID' (e.g. 'John Doe 220104045').",
+        error:
+          "Invalid account name format. Expected: 'Full Name 9-digit-StudentID' (e.g. 'John Doe 220041243').",
       });
     }
 
-    const { fullName, firstName, lastName, studentId, batch, department } = parsed;
+    const { fullName, firstName, lastName, studentId, batch, department } =
+      parsed;
 
     if (!department) {
       return res.status(400).json({
-        error: "Could not determine department from student ID. 5th digit must be 4 (CSE) or 5 (CEE).",
+        error:
+          "Could not determine department from student ID. 5th digit must be 4 (CSE) or 5 (CEE).",
       });
     }
 
@@ -151,7 +156,9 @@ export const completeRegistration = async (req, res) => {
     );
 
     if (studentLinkCheck.rows.length > 0) {
-      return res.status(409).json({ error: "Student ID already linked to another account." });
+      return res
+        .status(409)
+        .json({ error: "Student ID already linked to another account." });
     }
 
     const saltRounds = 10;
@@ -164,7 +171,12 @@ export const completeRegistration = async (req, res) => {
       `INSERT INTO departments (code, name)
        VALUES ($1, $2)
        ON CONFLICT (code) DO NOTHING`,
-      [department, department === "CSE" ? "Computer Science and Engineering" : "Civil and Environmental Engineering"],
+      [
+        department,
+        department === "CSE"
+          ? "Computer Science and Engineering"
+          : "Civil and Environmental Engineering",
+      ],
     );
 
     await pool.query(
@@ -233,7 +245,9 @@ export const login = async (req, res) => {
 
   try {
     if (!email || !password) {
-      return res.status(400).json({ error: "Email and password are required." });
+      return res
+        .status(400)
+        .json({ error: "Email and password are required." });
     }
 
     const result = await pool.query(
@@ -252,7 +266,11 @@ export const login = async (req, res) => {
     const user = result.rows[0];
 
     if (!user.password_hash) {
-      return res.status(401).json({ error: "Account not fully set up. Please complete registration." });
+      return res
+        .status(401)
+        .json({
+          error: "Account not fully set up. Please complete registration.",
+        });
     }
 
     const isValid = await bcrypt.compare(password, user.password_hash);
@@ -260,10 +278,9 @@ export const login = async (req, res) => {
       return res.status(401).json({ error: "Invalid email or password." });
     }
 
-    await pool.query(
-      "UPDATE users SET last_login = NOW() WHERE id = $1",
-      [user.id],
-    );
+    await pool.query("UPDATE users SET last_login = NOW() WHERE id = $1", [
+      user.id,
+    ]);
 
     const accessToken = jwt.sign(
       { userId: user.id, email: user.email, role: user.role },

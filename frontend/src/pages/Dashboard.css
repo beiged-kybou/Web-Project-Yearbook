@@ -539,6 +539,132 @@
 /* -- Feed -- */
 .feed-container {
   min-height: 300px;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  margin-bottom: 2.5rem;
+}
+
+.clubs-section {
+  margin-top: 2rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.clubs-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.clubs-subtitle {
+  color: var(--ink-brown-light);
+  font-size: 0.95rem;
+}
+
+.refresh-clubs {
+  border: 1px solid var(--paper-dark);
+  background: var(--paper-white);
+  padding: 0.45rem 1rem;
+  font-size: 0.9rem;
+  border-radius: var(--radius-sm);
+}
+
+.clubs-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1.2rem;
+}
+
+.club-card {
+  border: 1px solid var(--paper-dark);
+  border-radius: var(--radius-md);
+  background: var(--paper-white);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-shadow: var(--shadow-sm);
+  min-height: 220px;
+}
+
+.club-card--member {
+  border-color: var(--accent-forest);
+  box-shadow: var(--shadow-md);
+}
+
+.club-card-body {
+  padding: 1.25rem 1.25rem 0.75rem;
+}
+
+.club-code {
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--accent-burgundy);
+  margin-bottom: 0.3rem;
+}
+
+.club-name {
+  font-size: 1.1rem;
+  text-align: left;
+  margin-bottom: 0.5rem;
+}
+
+.club-description {
+  font-size: 0.92rem;
+  color: var(--ink-brown-light);
+}
+
+.club-card-footer {
+  padding: 0.85rem 1.25rem 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.club-membership {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.club-members-label {
+  font-size: 0.8rem;
+  color: var(--ink-brown-light);
+}
+
+.club-members-count {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--ink-brown);
+}
+
+.club-action {
+  padding: 0.4rem 1rem;
+  border-radius: 999px;
+  font-size: 0.9rem;
+  border: 1px solid var(--paper-dark);
+  background: var(--paper-light);
+  color: var(--ink-brown);
+}
+
+.club-action.join {
+  border-color: var(--accent-burgundy);
+  color: var(--paper-white);
+  background: var(--accent-burgundy);
+}
+
+.club-action.leave {
+  border-color: var(--accent-forest);
+  color: var(--accent-forest);
+  background: transparent;
+}
+
+.club-action:disabled {
+  opacity: 0.6;
 }
 
 .feed-section {
