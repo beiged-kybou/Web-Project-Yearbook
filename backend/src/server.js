@@ -9,6 +9,7 @@ import dashboardRoutes from "./routes/dashboardRoutes.js";
 import memoryRoutes from "./routes/memoryRoutes.js";
 import studentRoutes from "./routes/studentRoutes.js";
 import clubRoutes from "./routes/clubRoutes.js";
+import tagNotificationRoutes from "./routes/tagNotificationRoutes.js";
 
 dotenv.config();
 const app = express();
@@ -25,6 +26,7 @@ app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/students", studentRoutes);
 app.use("/api/memories", memoryRoutes);
 app.use("/api/clubs", clubRoutes);
+app.use("/api/tag-notifications", tagNotificationRoutes);
 
 app.use("/uploads", express.static("uploads"));
 

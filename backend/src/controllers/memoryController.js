@@ -137,8 +137,12 @@ export const createMemory = async (req, res) => {
     });
   }
 
+  const client = await pool.connect();
+
   try {
-    const userResult = await pool.query(
+    await client.query("BEGIN");
+
+    const userResult = await client.query(
       `SELECT u.student_id, s.department, s.graduation_year
        FROM users u
        LEFT JOIN students s ON u.student_id = s.student_id
@@ -175,7 +179,7 @@ export const createMemory = async (req, res) => {
 
     const privacyConfig = PRIVACY_CONFIG[privacy];
 
-    const albumLookupResult = await pool.query(
+    const albumLookupResult = await client.query(
       `SELECT id
        FROM albums
        WHERE type = $1 AND created_by = $2 AND title = $3
@@ -187,7 +191,7 @@ export const createMemory = async (req, res) => {
     if (albumLookupResult.rows.length > 0) {
       albumId = albumLookupResult.rows[0].id;
     } else {
-      const albumInsertResult = await pool.query(
+      const albumInsertResult = await client.query(
         `INSERT INTO albums (title, description, type, created_by)
          VALUES ($1, $2, $3, $4)
          RETURNING id`,
@@ -201,7 +205,7 @@ export const createMemory = async (req, res) => {
       albumId = albumInsertResult.rows[0].id;
     }
 
-    const memoryInsertResult = await pool.query(
+    const memoryInsertResult = await client.query(
       `INSERT INTO memories (title, content, created_by, album_id)
        VALUES ($1, $2, $3, $4)
        RETURNING id, title, content, created_by, album_id, created_at`,
@@ -219,7 +223,7 @@ export const createMemory = async (req, res) => {
     const combinedImageUrls = [...uploadedImageUrls, ...imageUrls];
 
     for (let index = 0; index < combinedImageUrls.length; index += 1) {
-      await pool.query(
+      await client.query(
         `INSERT INTO images (entity_type, entity_id, photo_url, sort_order)
          VALUES ('memory', $1, $2, $3)`,
         [String(memory.id), combinedImageUrls[index], index],
@@ -232,7 +236,7 @@ export const createMemory = async (req, res) => {
 
     let existingTaggedRows = [];
     if (cleanTagIds.length > 0) {
-      const existingTagsResult = await pool.query(
+      const existingTagsResult = await client.query(
         `SELECT student_id, department, graduation_year
          FROM students
          WHERE student_id = ANY($1::varchar[])`,
@@ -256,14 +260,22 @@ export const createMemory = async (req, res) => {
     );
 
     if (eligibleTaggedIds.length > 0) {
-      await pool.query(
-        `INSERT INTO memory_participants (memory_id, student_id)
-         SELECT $1, tagged_id
-         FROM unnest($2::varchar[]) AS tagged_id
-         ON CONFLICT DO NOTHING`,
-        [memory.id, eligibleTaggedIds],
+      await client.query(
+        `INSERT INTO tag_notifications (
+           memory_id,
+           tagged_student_id,
+           requested_by_student_id,
+           status
+         )
+         SELECT $1, tagged_id, $2, 'pending'
+         FROM unnest($3::varchar[]) AS tagged_id
+         ON CONFLICT (memory_id, tagged_student_id)
+         DO UPDATE SET status = 'pending', acted_at = NULL, acted_by_student_id = NULL, note = NULL`,
+        [memory.id, creatorStudentId, eligibleTaggedIds],
       );
     }
+
+    await client.query("COMMIT");
 
     return res.status(201).json({
       message: "Memory published successfully.",
@@ -272,14 +284,17 @@ export const createMemory = async (req, res) => {
       imagesAdded: combinedImageUrls.length,
       uploadedFiles: uploadedImageUrls.length,
       linkedImageUrls: imageUrls.length,
-      tagsAdded: eligibleTaggedIds,
+      tagsPendingApproval: eligibleTaggedIds,
       tagsSkipped: [...invalidTaggedStudentIds, ...outOfPrivacyGroupTagIds],
       outOfPrivacyGroupTagIds,
       invalidTaggedStudentIds,
     });
   } catch (error) {
+    await client.query("ROLLBACK");
     console.error("Create Memory Error:", error);
     return res.status(500).json({ error: "Failed to create memory." });
+  } finally {
+    client.release();
   }
 };
 

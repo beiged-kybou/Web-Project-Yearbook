@@ -46,6 +46,21 @@ export const ensureClubSetup = async (pool) => {
     )
   `);
 
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS tag_notifications (
+      id SERIAL PRIMARY KEY,
+      memory_id INTEGER NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+      tagged_student_id VARCHAR(32) NOT NULL REFERENCES students(student_id) ON DELETE CASCADE,
+      requested_by_student_id VARCHAR(32) NOT NULL REFERENCES students(student_id) ON DELETE CASCADE,
+      acted_by_student_id VARCHAR(32) REFERENCES students(student_id) ON DELETE SET NULL,
+      status VARCHAR(16) NOT NULL DEFAULT 'pending',
+      note TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      acted_at TIMESTAMPTZ,
+      UNIQUE (memory_id, tagged_student_id)
+    )
+  `);
+
   for (const club of DEFAULT_CLUBS) {
     await pool.query(
       `INSERT INTO clubs (code, name, description)
