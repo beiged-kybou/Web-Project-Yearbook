@@ -254,7 +254,35 @@ export async function getMyProfile(req, res) {
                       )
                FROM images i
                WHERE i.entity_type = 'memory' AND i.entity_id = m.id::text
-              ) AS images
+              ) AS images,
+              (SELECT json_agg(
+                        json_build_object(
+                          'student_id', ts.student_id,
+                          'first_name', ts.first_name,
+                          'last_name', ts.last_name,
+                          'department', ts.department,
+                          'graduation_year', ts.graduation_year,
+                          'photo_url', ts.photo_url
+                        )
+                      )
+               FROM memory_participants mp
+               JOIN students ts ON mp.student_id = ts.student_id
+               WHERE mp.memory_id = m.id
+              ) AS tagged_students,
+               (SELECT json_agg(
+                         json_build_object(
+                           'student_id', pending_ts.student_id,
+                           'first_name', pending_ts.first_name,
+                           'last_name', pending_ts.last_name,
+                           'department', pending_ts.department,
+                           'graduation_year', pending_ts.graduation_year,
+                           'photo_url', pending_ts.photo_url
+                         )
+                       )
+               FROM tag_notifications tn
+               JOIN students pending_ts ON tn.tagged_student_id = pending_ts.student_id
+               WHERE tn.memory_id = m.id AND tn.status = 'pending'
+              ) AS pending_tags
        FROM memories m
        LEFT JOIN albums a ON m.album_id = a.id
        WHERE m.created_by = $1

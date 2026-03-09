@@ -126,6 +126,8 @@ export const tagNotificationService = {
   },
 };
 
+export const notificationService = tagNotificationService;
+
 export const studentService = {
   searchStudents: async (query) => {
     const response = await api.get('/students/search', {

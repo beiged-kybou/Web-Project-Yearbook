@@ -93,7 +93,21 @@ export const getDashboard = async (req, res) => {
                  FROM memory_participants mp
                  JOIN students ts ON mp.student_id = ts.student_id
                  WHERE mp.memory_id = m.id
-                ) AS tagged_students
+                ) AS tagged_students,
+                 (SELECT json_agg(
+                           json_build_object(
+                             'student_id', pending_ts.student_id,
+                             'first_name', pending_ts.first_name,
+                             'last_name', pending_ts.last_name,
+                             'department', pending_ts.department,
+                             'graduation_year', pending_ts.graduation_year,
+                             'photo_url', pending_ts.photo_url
+                           )
+                         )
+                  FROM tag_notifications tn
+                  JOIN students pending_ts ON tn.tagged_student_id = pending_ts.student_id
+                  WHERE tn.memory_id = m.id AND tn.status = 'pending'
+                 ) AS pending_tags
          FROM memories m
          LEFT JOIN students s ON m.created_by = s.student_id
          WHERE m.album_id = ANY($1)
@@ -131,7 +145,21 @@ export const getDashboard = async (req, res) => {
                FROM memory_participants mp
                JOIN students ts ON mp.student_id = ts.student_id
                WHERE mp.memory_id = m.id
-              ) AS tagged_students
+              ) AS tagged_students,
+               (SELECT json_agg(
+                         json_build_object(
+                           'student_id', pending_ts.student_id,
+                           'first_name', pending_ts.first_name,
+                           'last_name', pending_ts.last_name,
+                           'department', pending_ts.department,
+                           'graduation_year', pending_ts.graduation_year,
+                           'photo_url', pending_ts.photo_url
+                         )
+                       )
+               FROM tag_notifications tn
+               JOIN students pending_ts ON tn.tagged_student_id = pending_ts.student_id
+               WHERE tn.memory_id = m.id AND tn.status = 'pending'
+              ) AS pending_tags
        FROM memories m
        LEFT JOIN students s ON m.created_by = s.student_id
        WHERE m.album_id IS NULL
@@ -165,7 +193,21 @@ export const getDashboard = async (req, res) => {
                FROM memory_participants mp
                JOIN students ts ON mp.student_id = ts.student_id
                WHERE mp.memory_id = m.id
-              ) AS tagged_students
+              ) AS tagged_students,
+               (SELECT json_agg(
+                         json_build_object(
+                           'student_id', pending_ts.student_id,
+                           'first_name', pending_ts.first_name,
+                           'last_name', pending_ts.last_name,
+                           'department', pending_ts.department,
+                           'graduation_year', pending_ts.graduation_year,
+                           'photo_url', pending_ts.photo_url
+                         )
+                       )
+               FROM tag_notifications tn
+               JOIN students pending_ts ON tn.tagged_student_id = pending_ts.student_id
+               WHERE tn.memory_id = m.id AND tn.status = 'pending'
+              ) AS pending_tags
        FROM memories m
        LEFT JOIN students s ON m.created_by = s.student_id
        WHERE m.album_id IS NULL
@@ -199,7 +241,21 @@ export const getDashboard = async (req, res) => {
                FROM memory_participants mp
                JOIN students ts ON mp.student_id = ts.student_id
                WHERE mp.memory_id = m.id
-              ) AS tagged_students
+              ) AS tagged_students,
+               (SELECT json_agg(
+                         json_build_object(
+                           'student_id', pending_ts.student_id,
+                           'first_name', pending_ts.first_name,
+                           'last_name', pending_ts.last_name,
+                           'department', pending_ts.department,
+                           'graduation_year', pending_ts.graduation_year,
+                           'photo_url', pending_ts.photo_url
+                         )
+                       )
+               FROM tag_notifications tn
+               JOIN students pending_ts ON tn.tagged_student_id = pending_ts.student_id
+               WHERE tn.memory_id = m.id AND tn.status = 'pending'
+              ) AS pending_tags
        FROM memories m
        LEFT JOIN students s ON m.created_by = s.student_id
        WHERE m.album_id IS NULL

@@ -507,6 +507,17 @@
   gap: 0.45rem;
 }
 
+.profile-memory-tags,
+.profile-memory-pending {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.profile-memory-pending .pending-tag-list {
+  flex-wrap: wrap;
+}
+
 .profile-memory-headline {
   font-size: 0.98rem;
   color: var(--ink-brown);
@@ -806,6 +817,31 @@
   color: var(--ink-brown);
   font-size: 0.78rem;
   padding: 0.22rem 0.62rem;
+}
+
+.memory-tag-chip.pending {
+  border-color: var(--accent-gold);
+  background: rgba(212, 175, 55, 0.18);
+  color: var(--ink-brown);
+}
+
+.memory-pending-tags {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-bottom: 0.65rem;
+}
+
+.pending-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--accent-gold-dark, #8b6b20);
+}
+
+.pending-tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
 }
 
 .memory-images {
