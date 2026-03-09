@@ -103,6 +103,7 @@ export const createMemory = async (req, res) => {
   const headline = req.body.headline?.trim();
   const caption = req.body.caption?.trim();
   const privacy = (req.body.privacy || "public").trim().toLowerCase();
+  const clubCode = req.body.clubCode?.trim();
   const imageUrls = normalizeStringArray(req.body.imageUrls).filter(
     isLikelyUrl,
   );
@@ -118,7 +119,9 @@ export const createMemory = async (req, res) => {
     return res.status(400).json({ error: "Caption is required." });
   }
 
-  if (!Object.keys(PRIVACY_CONFIG).includes(privacy)) {
+  const allowedPrivacy = new Set([...Object.keys(PRIVACY_CONFIG), "club"]);
+
+  if (!allowedPrivacy.has(privacy)) {
     return res
       .status(400)
       .json({
@@ -177,7 +180,38 @@ export const createMemory = async (req, res) => {
         .json({ error: "No batch found for your profile." });
     }
 
-    const privacyConfig = PRIVACY_CONFIG[privacy];
+    let clubContext = null;
+
+    if (privacy === "club") {
+      if (!clubCode) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({ error: "clubCode is required for club privacy." });
+      }
+
+      const clubResult = await client.query(
+        `SELECT c.id, c.code, c.name
+         FROM clubs c
+         JOIN club_members cm ON cm.club_id = c.id
+         WHERE c.code = $1 AND cm.student_id = $2`,
+        [clubCode, creatorStudentId],
+      );
+
+      if (clubResult.rows.length === 0) {
+        await client.query("ROLLBACK");
+        return res.status(403).json({ error: "You must be a member of the selected club to post." });
+      }
+
+      clubContext = clubResult.rows[0];
+    }
+
+    const privacyConfig =
+      privacy === "club"
+        ? {
+            albumType: "club",
+            title: `${clubContext.name} Club Memories`,
+            description: `Shared inside ${clubContext.name}`,
+          }
+        : PRIVACY_CONFIG[privacy];
 
     const albumLookupResult = await client.query(
       `SELECT id
@@ -251,9 +285,26 @@ export const createMemory = async (req, res) => {
       (studentId) => !existingStudentIds.includes(studentId),
     );
 
-    const eligibleTaggedIds = existingTaggedRows
-      .filter((row) => isEligibleForPrivacy(privacy, creator, row))
-      .map((row) => row.student_id);
+    let eligibleTaggedIds = [];
+
+    if (existingTaggedRows.length > 0) {
+      if (privacy === "club" && clubContext) {
+        const membershipResult = await client.query(
+          `SELECT student_id
+           FROM club_members
+           WHERE club_id = $1 AND student_id = ANY($2::varchar[])`,
+          [clubContext.id, existingStudentIds],
+        );
+        const memberIds = new Set(membershipResult.rows.map((row) => row.student_id));
+        eligibleTaggedIds = existingTaggedRows
+          .filter((row) => memberIds.has(row.student_id))
+          .map((row) => row.student_id);
+      } else {
+        eligibleTaggedIds = existingTaggedRows
+          .filter((row) => isEligibleForPrivacy(privacy, creator, row))
+          .map((row) => row.student_id);
+      }
+    }
 
     const outOfPrivacyGroupTagIds = existingStudentIds.filter(
       (studentId) => !eligibleTaggedIds.includes(studentId),
@@ -288,6 +339,7 @@ export const createMemory = async (req, res) => {
       tagsSkipped: [...invalidTaggedStudentIds, ...outOfPrivacyGroupTagIds],
       outOfPrivacyGroupTagIds,
       invalidTaggedStudentIds,
+      clubCode: privacy === "club" ? clubContext?.code : null,
     });
   } catch (error) {
     await client.query("ROLLBACK");

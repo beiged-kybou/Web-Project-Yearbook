@@ -18,6 +18,7 @@ const Dashboard = () => {
     const [tagSuggestions, setTagSuggestions] = useState([]);
     const [tagSearchLoading, setTagSearchLoading] = useState(false);
     const [postPrivacy, setPostPrivacy] = useState('public');
+    const [selectedClubCode, setSelectedClubCode] = useState('');
     const [postLoading, setPostLoading] = useState(false);
     const [postError, setPostError] = useState('');
     const [postSuccess, setPostSuccess] = useState('');
@@ -202,6 +203,7 @@ const Dashboard = () => {
                 files: selectedFiles,
                 taggedStudentIds,
                 privacy: postPrivacy,
+                clubCode: postPrivacy === 'club' ? selectedClubCode : undefined,
             });
 
             const skipped = result.tagsSkipped?.length
@@ -216,13 +218,56 @@ const Dashboard = () => {
             setTagSearch('');
             setSelectedTagStudents([]);
             setTagSuggestions([]);
-            setActiveTab(postPrivacy);
+            setSelectedClubCode('');
+            setActiveTab(postPrivacy === 'club' ? 'department' : postPrivacy);
             setShowPostModal(false);
             await fetchDashboard();
         } catch (err) {
             setPostError(err.response?.data?.error || 'Failed to post memory.');
         } finally {
             setPostLoading(false);
+        }
+    };
+
+    const fetchClubs = async () => {
+        setClubError('');
+        try {
+            setClubLoading(true);
+            const [clubList, myClubsResult] = await Promise.all([
+                clubService.listClubs(),
+                clubService.myClubs().catch(() => ({ clubs: [] })),
+            ]);
+
+            setClubs(clubList.clubs || []);
+            setMyClubCodes(new Set((myClubsResult.clubs || []).map((club) => club.code)));
+        } catch (err) {
+            setClubError(err.response?.data?.error || 'Failed to load clubs.');
+        } finally {
+            setClubLoading(false);
+        }
+    };
+
+    const toggleClub = async (clubCode, isMember) => {
+        if (!clubCode) return;
+        try {
+            setClubError('');
+            if (isMember) {
+                await clubService.leave(clubCode);
+                setMyClubCodes((prev) => {
+                    const next = new Set(prev);
+                    next.delete(clubCode);
+                    return next;
+                });
+            } else {
+                await clubService.join(clubCode);
+                setMyClubCodes((prev) => {
+                    const next = new Set(prev);
+                    next.add(clubCode);
+                    return next;
+                });
+            }
+        } catch (err) {
+            setClubError(err.response?.data?.error || 'Club action failed.');
         }
     };
 
@@ -327,13 +372,49 @@ const Dashboard = () => {
                                 <select
                                     id="postPrivacy"
                                     value={postPrivacy}
-                                    onChange={(event) => setPostPrivacy(event.target.value)}
+                                    onChange={(event) => {
+                                        const nextPrivacy = event.target.value;
+                                        setPostPrivacy(nextPrivacy);
+                                        if (nextPrivacy !== 'club') {
+                                            setSelectedClubCode('');
+                                        }
+                                    }}
                                 >
                                     <option value="department">Department</option>
                                     <option value="batch">Batch</option>
                                     <option value="public">Public</option>
+                                    <option value="club" disabled={myClubCodes.size === 0}>Club</option>
                                 </select>
                             </div>
+
+                            {postPrivacy === 'club' && (
+                                <div className="form-group">
+                                    <label htmlFor="clubSelector">Select club</label>
+                                <select
+                                    id="clubSelector"
+                                    value={selectedClubCode}
+                                    onChange={(event) => setSelectedClubCode(event.target.value)}
+                                    required
+                                    disabled={myClubCodes.size === 0}
+                                >
+                                    <option value="" disabled>
+                                        {myClubCodes.size === 0
+                                            ? 'Join a club first in the Clubs section.'
+                                            : 'Choose one of your clubs'}
+                                    </option>
+                                    {clubs
+                                        .filter((club) => myClubCodes.has(club.code))
+                                        .map((club) => (
+                                            <option key={club.code} value={club.code}>
+                                                {club.name} ({club.code})
+                                            </option>
+                                        ))}
+                                </select>
+                                    <small className="composer-hint">
+                                        Club memories stay visible to members of the selected club only.
+                                    </small>
+                                </div>
+                            )}
 
                             <div className="form-group">
                                 <label htmlFor="headline">Headline</label>
@@ -813,40 +894,3 @@ const PrivacyMemoryCollection = ({ title, memories, formatDate }) => (
 );
 
 export default Dashboard;
-    const fetchClubs = async () => {
-        setClubError('');
-        try {
-            setClubLoading(true);
-            const [clubList, myClubsResult] = await Promise.all([
-                clubService.listClubs(),
-                clubService.myClubs().catch(() => ({ clubs: [] })),
-            ]);
-
-            setClubs(clubList.clubs || []);
-            setMyClubCodes(new Set((myClubsResult.clubs || []).map((club) => club.code)));
-        } catch (err) {
-            setClubError(err.response?.data?.error || 'Failed to load clubs.');
-        } finally {
-            setClubLoading(false);
-        }
-    };
-
-    const toggleClub = async (clubCode, isMember) => {
-        if (!clubCode) return;
-        try {
-            setClubError('');
-            if (isMember) {
-                await clubService.leave(clubCode);
-                setMyClubCodes((prev) => {
-                    const next = new Set(prev);
-                    next.delete(clubCode);
-                    return next;
-                });
-            } else {
-                await clubService.join(clubCode);
-                setMyClubCodes((prev) => new Set(prev).add(clubCode));
-            }
-        } catch (err) {
-            setClubError(err.response?.data?.error || 'Club action failed.');
-        }
-    };

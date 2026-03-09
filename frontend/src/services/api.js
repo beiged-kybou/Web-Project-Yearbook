@@ -74,17 +74,20 @@ export const clubService = {
 };
 
 export const memoryService = {
-  createMemory: async ({ headline, caption, imageUrls, taggedStudentIds, privacy, files }) => {
+  createMemory: async ({ headline, caption, imageUrls, taggedStudentIds, privacy, clubCode, files = [] }) => {
     const token = localStorage.getItem('accessToken');
 
     const formData = new FormData();
     formData.append('headline', headline);
     formData.append('caption', caption);
     formData.append('privacy', privacy);
+    if (privacy === 'club' && clubCode) {
+      formData.append('clubCode', clubCode);
+    }
     formData.append('imageUrls', JSON.stringify(imageUrls || []));
     formData.append('taggedStudentIds', JSON.stringify(taggedStudentIds || []));
 
-    (files || []).forEach((file) => {
+    files.forEach((file) => {
       formData.append('images', file);
     });
 
@@ -96,6 +99,27 @@ export const memoryService = {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'multipart/form-data',
         },
+      },
+    );
+    return response.data;
+  },
+};
+
+export const tagNotificationService = {
+  list: async () => {
+    const token = localStorage.getItem('accessToken');
+    const response = await api.get('/tag-notifications/me', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  decide: async (notificationId, decision, note) => {
+    const token = localStorage.getItem('accessToken');
+    const response = await api.post(
+      `/tag-notifications/${notificationId}/decision`,
+      { decision, note },
+      {
+        headers: { Authorization: `Bearer ${token}` },
       },
     );
     return response.data;
