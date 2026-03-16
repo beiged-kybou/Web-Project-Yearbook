@@ -435,6 +435,289 @@ export const createMemory = async (req, res) => {
   }
 };
 
+export const listDrafts = async (req, res) => {
+  const pool = await req.app.locals.getPool();
+  const { userId } = req.user;
+
+  try {
+    const userResult = await pool.query(
+      `SELECT student_id
+       FROM users
+       WHERE id = $1`,
+      [userId],
+    );
+
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ error: "User not found." });
+    }
+
+    const studentId = userResult.rows[0].student_id;
+    if (!studentId) {
+      return res.status(400).json({ error: "Link a student profile before managing drafts." });
+    }
+
+    const draftsResult = await pool.query(
+      `SELECT m.id, m.title, m.content, m.created_at, m.updated_at,
+              m.status, m.album_id,
+              COALESCE(a.type, 'group') AS album_type,
+              COALESCE(a.title, 'Public Memories') AS album_title,
+              (SELECT json_agg(json_build_object('id', i.id, 'url', i.photo_url, 'sort', i.sort_order)
+                               ORDER BY i.sort_order)
+               FROM images i
+               WHERE i.entity_type = 'memory' AND i.entity_id = m.id::text
+              ) AS images
+       FROM memories m
+       LEFT JOIN albums a ON a.id = m.album_id
+       WHERE m.created_by = $1 AND m.status = 'draft'
+       ORDER BY m.updated_at DESC NULLS LAST, m.created_at DESC`,
+      [studentId],
+    );
+
+    return res.status(200).json({ drafts: draftsResult.rows });
+  } catch (error) {
+    console.error("List drafts error", error);
+    return res.status(500).json({ error: "Failed to load drafts." });
+  }
+};
+
+export const updateDraft = async (req, res) => {
+  const pool = await req.app.locals.getPool();
+  const { userId } = req.user;
+  const { draftId } = req.params;
+  const action = (req.body.action || "save").trim().toLowerCase();
+
+  const allowedActions = new Set(["save", "publish", "delete"]);
+  if (!allowedActions.has(action)) {
+    return res.status(400).json({ error: "action must be save, publish, or delete." });
+  }
+
+  const headline = req.body.headline?.trim();
+  const caption = req.body.caption?.trim();
+  const privacy = req.body.privacy?.trim().toLowerCase();
+  const clubCode = req.body.clubCode?.trim();
+  const imageUrls = normalizeStringArray(req.body.imageUrls).filter(isLikelyUrl);
+  const taggedStudentIds = [
+    ...new Set(normalizeStringArray(req.body.taggedStudentIds)),
+  ];
+
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    const userResult = await client.query(
+      `SELECT u.student_id, s.department, s.graduation_year
+       FROM users u
+       LEFT JOIN students s ON u.student_id = s.student_id
+       WHERE u.id = $1`,
+      [userId],
+    );
+
+    if (userResult.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "User not found." });
+    }
+
+    const creator = userResult.rows[0];
+    const creatorStudentId = creator.student_id;
+
+    if (!creatorStudentId) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ error: "Link a student profile first." });
+    }
+
+    const draftResult = await client.query(
+      `SELECT m.id, m.title, m.content, m.album_id, m.status,
+              a.type AS album_type, a.title AS album_title
+       FROM memories m
+       LEFT JOIN albums a ON a.id = m.album_id
+       WHERE m.id = $1 AND m.created_by = $2`,
+      [draftId, creatorStudentId],
+    );
+
+    if (draftResult.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "Draft not found." });
+    }
+
+    const draft = draftResult.rows[0];
+    if (draft.status !== "draft") {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ error: "Only drafts can be updated via this endpoint." });
+    }
+
+    if (action === "delete") {
+      await client.query(`DELETE FROM memories WHERE id = $1`, [draft.id]);
+      await client.query("COMMIT");
+      return res.status(200).json({ message: "Draft deleted." });
+    }
+
+    if (privacy && ![...Object.keys(PRIVACY_CONFIG), "club"].includes(privacy)) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ error: "Invalid privacy choice." });
+    }
+
+    let clubContext = null;
+    if (privacy === "club") {
+      if (!clubCode) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({ error: "clubCode is required for club privacy." });
+      }
+
+      const clubResult = await client.query(
+        `SELECT c.id, c.code, c.name
+         FROM clubs c
+         JOIN club_members cm ON cm.club_id = c.id
+         WHERE c.code = $1 AND cm.student_id = $2`,
+        [clubCode, creatorStudentId],
+      );
+
+      if (clubResult.rows.length === 0) {
+        await client.query("ROLLBACK");
+        return res.status(403).json({ error: "You must be a club member to post." });
+      }
+
+      clubContext = clubResult.rows[0];
+    }
+
+    const nextPrivacy = privacy || draft.album_type || "public";
+    let albumId = draft.album_id;
+
+    if (!albumId || (privacy && privacy !== draft.album_type)) {
+      const privacyConfig =
+        nextPrivacy === "club"
+          ? {
+              albumType: "club",
+              title: `${clubContext?.name || "Club"} Club Memories`,
+              description: clubContext ? `Shared inside ${clubContext.name}` : null,
+            }
+          : PRIVACY_CONFIG[nextPrivacy] || PRIVACY_CONFIG.public;
+
+      const albumLookupResult = await client.query(
+        `SELECT id
+         FROM albums
+         WHERE type = $1 AND created_by = $2 AND title = $3
+         LIMIT 1`,
+        [privacyConfig.albumType, creatorStudentId, privacyConfig.title],
+      );
+
+      if (albumLookupResult.rows.length > 0) {
+        albumId = albumLookupResult.rows[0].id;
+      } else {
+        const albumInsertResult = await client.query(
+          `INSERT INTO albums (title, description, type, created_by)
+           VALUES ($1, $2, $3, $4)
+           RETURNING id`,
+          [
+            privacyConfig.title,
+            privacyConfig.description,
+            privacyConfig.albumType,
+            creatorStudentId,
+          ],
+        );
+        albumId = albumInsertResult.rows[0].id;
+      }
+    }
+
+    const isPublishing = action === "publish";
+    const validationIssues = buildValidationErrors({
+      headline,
+      caption,
+      isDraft: !isPublishing,
+    });
+
+    if (isPublishing && validationIssues.length > 0) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ error: "Validation failed.", issues: validationIssues });
+    }
+
+    const nextStatus = isPublishing ? "pending" : "draft";
+
+    await client.query(
+      `UPDATE memories
+       SET title = COALESCE($1, title),
+           content = COALESCE($2, content),
+           album_id = $3,
+           status = $4,
+           updated_at = NOW()
+       WHERE id = $5`,
+      [headline || null, caption || null, albumId, nextStatus, draft.id],
+    );
+
+    if (Array.isArray(req.body.replaceImages) && req.body.replaceImages.includes("all")) {
+      await client.query(`DELETE FROM images WHERE entity_type = 'memory' AND entity_id = $1`, [draft.id]);
+    }
+
+    const uploadedImageUrls = [];
+    for (const file of req.files || []) {
+      const uploadResult = await uploadBufferToCloudinary(file.buffer);
+      uploadedImageUrls.push(uploadResult.secure_url);
+    }
+
+    const combinedImageUrls = [...uploadedImageUrls, ...imageUrls];
+    if (combinedImageUrls.length > 0) {
+      await client.query(`DELETE FROM images WHERE entity_type = 'memory' AND entity_id = $1`, [draft.id]);
+      for (let index = 0; index < combinedImageUrls.length; index += 1) {
+        await client.query(
+          `INSERT INTO images (entity_type, entity_id, photo_url, sort_order)
+           VALUES ('memory', $1, $2, $3)`,
+          [String(draft.id), combinedImageUrls[index], index],
+        );
+      }
+    }
+
+    await client.query(`DELETE FROM tag_notifications WHERE memory_id = $1`, [draft.id]);
+    await client.query(`DELETE FROM memory_participants WHERE memory_id = $1`, [draft.id]);
+
+    if (isPublishing && taggedStudentIds.length > 0) {
+      const cleanTagIds = taggedStudentIds.filter((studentId) => studentId && studentId !== creatorStudentId);
+
+      if (cleanTagIds.length > 0) {
+        const existingTagsResult = await client.query(
+          `SELECT student_id, department, graduation_year
+           FROM students
+           WHERE student_id = ANY($1::varchar[])`,
+          [cleanTagIds],
+        );
+
+        const eligibleTaggedIds = existingTagsResult.rows
+          .filter((row) => isEligibleForPrivacy(nextPrivacy, creator, row))
+          .map((row) => row.student_id);
+
+        if (eligibleTaggedIds.length > 0) {
+          await client.query(
+            `INSERT INTO tag_notifications (
+               memory_id,
+               tagged_student_id,
+               requested_by_student_id,
+               status
+             )
+             SELECT $1, tagged_id, $2, 'pending'
+             FROM unnest($3::varchar[]) AS tagged_id
+             ON CONFLICT (memory_id, tagged_student_id)
+             DO UPDATE SET status = 'pending', acted_at = NULL, acted_by_student_id = NULL, note = NULL`,
+            [draft.id, creatorStudentId, eligibleTaggedIds],
+          );
+        }
+      }
+    }
+
+    await client.query("COMMIT");
+
+    return res.status(200).json({
+      message: isPublishing ? "Draft submitted for review." : "Draft saved.",
+      draftId: draft.id,
+      status: nextStatus,
+    });
+  } catch (error) {
+    await client.query("ROLLBACK");
+    console.error("Update draft error", error);
+    return res.status(500).json({ error: "Failed to update draft." });
+  } finally {
+    client.release();
+  }
+};
+
 export const createPublicMemory = (req, res) => {
   req.body = { ...req.body, privacy: "public" };
   return createMemory(req, res);

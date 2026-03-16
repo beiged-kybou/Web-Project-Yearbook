@@ -153,6 +153,43 @@ export const memoryService = {
     );
     return response.data;
   },
+  listDrafts: async () => {
+    const token = localStorage.getItem('accessToken');
+    const response = await api.get('/memories/drafts', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  updateDraft: async (draftId, { action = 'save', headline, caption, imageUrls, taggedStudentIds, privacy, clubCode, files = [] }) => {
+    const token = localStorage.getItem('accessToken');
+
+    const formData = new FormData();
+    formData.append('action', action);
+    if (headline !== undefined) formData.append('headline', headline);
+    if (caption !== undefined) formData.append('caption', caption);
+    if (privacy) formData.append('privacy', privacy);
+    if (privacy === 'club' && clubCode) {
+      formData.append('clubCode', clubCode);
+    }
+    if (imageUrls) {
+      formData.append('imageUrls', JSON.stringify(imageUrls));
+    }
+    if (taggedStudentIds) {
+      formData.append('taggedStudentIds', JSON.stringify(taggedStudentIds));
+    }
+
+    files.forEach((file) => {
+      formData.append('images', file);
+    });
+
+    const response = await api.put(`/memories/drafts/${draftId}`, formData, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  },
 };
 
 export const tagNotificationService = {

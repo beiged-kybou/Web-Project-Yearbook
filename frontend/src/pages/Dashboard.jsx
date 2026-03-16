@@ -42,6 +42,10 @@ const Dashboard = () => {
     const [myMemories, setMyMemories] = useState({ department: [], batch: [], public: [], drafts: [] });
     const [isDraft, setIsDraft] = useState(false);
     const [liveValidation, setLiveValidation] = useState({ headline: '', caption: '' });
+    const [drafts, setDrafts] = useState([]);
+    const [draftLoading, setDraftLoading] = useState(false);
+    const [draftError, setDraftError] = useState('');
+    const [editingDraft, setEditingDraft] = useState(null);
 
     useEffect(() => {
         const token = localStorage.getItem('accessToken');
@@ -51,6 +55,7 @@ const Dashboard = () => {
         }
         fetchDashboard();
         fetchClubs();
+        fetchDrafts();
     }, []);
 
     const fetchDashboard = async () => {
@@ -92,6 +97,7 @@ const Dashboard = () => {
             });
             setSelectedProfileFile(null);
             setMyMemories(result.memories || { department: [], batch: [], public: [], drafts: [] });
+            await fetchDrafts();
         } catch (err) {
             setProfileError(err.response?.data?.error || 'Failed to load profile.');
         } finally {
@@ -119,6 +125,7 @@ const Dashboard = () => {
             setMyMemories(result.memories || { department: [], batch: [], public: [], drafts: [] });
             setProfileSuccess('Profile updated successfully.');
             await fetchDashboard();
+            await fetchDrafts();
         } catch (err) {
             setProfileError(err.response?.data?.error || 'Failed to update profile.');
         } finally {
@@ -172,6 +179,57 @@ const Dashboard = () => {
         setSelectedTagStudents((prev) => [...prev, student]);
         setTagSearch('');
         setTagSuggestions([]);
+    };
+
+    const fetchDrafts = async () => {
+        try {
+            setDraftError('');
+            setDraftLoading(true);
+            const response = await memoryService.listDrafts();
+            setDrafts(response.drafts || []);
+        } catch (err) {
+            setDraftError(err.response?.data?.error || 'Failed to load drafts.');
+        } finally {
+            setDraftLoading(false);
+        }
+    };
+
+    const startEditingDraft = (draft) => {
+        if (!draft) return;
+        setEditingDraft(draft);
+        setHeadline(draft.title || '');
+        setCaption(draft.content || '');
+        setPostPrivacy(mapAlbumTypeToPrivacy(draft.album_type));
+        setIsDraft(true);
+        setShowPostModal(true);
+        setPostError('');
+        setPostSuccess('');
+        setLiveValidation({ headline: '', caption: '' });
+        setTagSearch('');
+        setSelectedTagStudents([]);
+        setTagSuggestions([]);
+        setSelectedClubCode('');
+    };
+
+    const clearComposer = () => {
+        setHeadline('');
+        setCaption('');
+        setImageUrlsInput('');
+        setSelectedFiles([]);
+        setTagSearch('');
+        setSelectedTagStudents([]);
+        setTagSuggestions([]);
+        setSelectedClubCode('');
+        setIsDraft(false);
+        setLiveValidation({ headline: '', caption: '' });
+        setEditingDraft(null);
+    };
+
+    const mapAlbumTypeToPrivacy = (type) => {
+        if (type === 'department') return 'department';
+        if (type === 'batch') return 'batch';
+        if (type === 'club') return 'club';
+        return 'public';
     };
 
     const validateField = (field, value) => {
@@ -238,36 +296,42 @@ const Dashboard = () => {
 
         try {
             setPostLoading(true);
-            const result = await memoryService.createMemory({
-                headline: trimmedHeadline,
-                caption: trimmedCaption,
-                imageUrls,
-                files: selectedFiles,
-                taggedStudentIds,
-                privacy: postPrivacy,
-                clubCode: postPrivacy === 'club' ? selectedClubCode : undefined,
-                isDraft,
-            });
+            let result;
+            if (editingDraft) {
+                result = await memoryService.updateDraft(editingDraft.id, {
+                    action: isDraft ? 'save' : 'publish',
+                    headline: trimmedHeadline,
+                    caption: trimmedCaption,
+                    imageUrls,
+                    taggedStudentIds,
+                    privacy: postPrivacy,
+                    clubCode: postPrivacy === 'club' ? selectedClubCode : undefined,
+                    files: selectedFiles,
+                });
+            } else {
+                result = await memoryService.createMemory({
+                    headline: trimmedHeadline,
+                    caption: trimmedCaption,
+                    imageUrls,
+                    files: selectedFiles,
+                    taggedStudentIds,
+                    privacy: postPrivacy,
+                    clubCode: postPrivacy === 'club' ? selectedClubCode : undefined,
+                    isDraft,
+                });
+            }
 
             const skipped = result.tagsSkipped?.length
                 ? ` Some tags were skipped: ${result.tagsSkipped.join(', ')}.`
                 : '';
 
-            const draftNote = result.memory?.status === 'draft' ? ' Draft saved.' : '';
+            const draftNote = (result.memory?.status || result.status) === 'draft' ? ' Draft saved.' : '';
             setPostSuccess(`${result.message || 'Done.'}${draftNote}${skipped}`.trim());
-            setHeadline('');
-            setCaption('');
-            setImageUrlsInput('');
-            setSelectedFiles([]);
-            setTagSearch('');
-            setSelectedTagStudents([]);
-            setTagSuggestions([]);
-            setSelectedClubCode('');
-            setIsDraft(false);
-            setLiveValidation({ headline: '', caption: '' });
+            clearComposer();
             setActiveTab(postPrivacy === 'club' ? 'department' : postPrivacy);
             setShowPostModal(false);
             await fetchDashboard();
+            await fetchDrafts();
         } catch (err) {
             setPostError(err.response?.data?.error || 'Failed to post memory.');
         } finally {
@@ -475,7 +539,7 @@ const Dashboard = () => {
                                                 }
                                             }}
                                         />
-                                        <span>Save as draft</span>
+                                        <span>{editingDraft ? 'Keep as draft' : 'Save as draft'}</span>
                                     </label>
                                 </div>
                                 <select
@@ -648,12 +712,17 @@ const Dashboard = () => {
                                 </small>
                             </div>
 
-                            {postError && <div className="error-message">{postError}</div>}
-                            {postSuccess && <div className="success-message">{postSuccess}</div>}
+                             {postError && <div className="error-message">{postError}</div>}
+                             {postSuccess && <div className="success-message">{postSuccess}</div>}
 
-                            <button type="submit" className="primary" disabled={postLoading}>
-                                {postLoading ? 'Publishing...' : 'Publish Memory'}
-                            </button>
+                             <div className="composer-actions">
+                                <button type="button" className="ghost" onClick={() => { clearComposer(); setShowPostModal(false); }} disabled={postLoading}>
+                                     Cancel
+                                 </button>
+                                <button type="submit" className="primary" disabled={postLoading}>
+                                     {postLoading ? (isDraft ? 'Saving...' : 'Publishing...') : editingDraft ? (isDraft ? 'Save Draft' : 'Publish Draft') : isDraft ? 'Save Draft' : 'Publish Memory'}
+                                 </button>
+                             </div>
                         </form>
                     </section>
                 </div>
@@ -780,11 +849,29 @@ const Dashboard = () => {
                 memories={myMemories.public || []}
                 formatDate={formatDate}
             />
-            <PrivacyMemoryCollection
-                title="Drafts"
-                memories={myMemories.drafts || []}
-                formatDate={formatDate}
-                isDraft
+            <DraftManager
+                drafts={drafts}
+                loading={draftLoading}
+                error={draftError}
+                onRefresh={fetchDrafts}
+                onEdit={startEditingDraft}
+                onDelete={async (draftId) => {
+                    try {
+                        await memoryService.updateDraft(draftId, { action: 'delete' });
+                        await fetchDrafts();
+                    } catch (err) {
+                        setDraftError(err.response?.data?.error || 'Failed to delete draft.');
+                    }
+                }}
+                onPublish={async (draftId) => {
+                    try {
+                        await memoryService.updateDraft(draftId, { action: 'publish' });
+                        await fetchDrafts();
+                        await fetchDashboard();
+                    } catch (err) {
+                        setDraftError(err.response?.data?.error || 'Failed to publish draft.');
+                    }
+                }}
             />
         </div>
                             </>
@@ -1151,6 +1238,49 @@ const PrivacyMemoryCollection = ({ title, memories, formatDate, isDraft = false 
                         </div>
                     );
                 })}
+            </div>
+        )}
+    </section>
+);
+
+const DraftManager = ({ drafts, loading, error, onRefresh, onEdit, onDelete, onPublish }) => (
+    <section className="draft-manager">
+        <div className="draft-manager-header">
+            <h5>Drafts</h5>
+            <button type="button" className="ghost" onClick={onRefresh} disabled={loading}>
+                {loading ? 'Refreshing...' : 'Refresh'}
+            </button>
+        </div>
+        {error && <div className="error-message">{error}</div>}
+        {loading ? (
+            <p className="loading-text">Loading drafts...</p>
+        ) : drafts.length === 0 ? (
+            <p className="privacy-memory-empty">No drafts yet. Save one from the composer.</p>
+        ) : (
+            <div className="draft-grid">
+                {drafts.map((draft) => (
+                    <article key={draft.id} className="draft-card">
+                        <header>
+                            <div>
+                                <h6>{draft.title || 'Untitled draft'}</h6>
+                                <span className="draft-updated">Updated {new Date(draft.updated_at || draft.created_at).toLocaleDateString('en-US')}</span>
+                            </div>
+                            <span className="draft-privacy">{draft.album_type}</span>
+                        </header>
+                        <p className="draft-preview">{draft.content || 'No caption yet.'}</p>
+                        <footer>
+                            <button type="button" className="ghost" onClick={() => onEdit(draft)}>
+                                Edit
+                            </button>
+                            <button type="button" className="primary" onClick={() => onPublish(draft.id)}>
+                                Publish
+                            </button>
+                            <button type="button" className="danger" onClick={() => onDelete(draft.id)}>
+                                Delete
+                            </button>
+                        </footer>
+                    </article>
+                ))}
             </div>
         )}
     </section>
