@@ -324,7 +324,7 @@ export async function getMyProfile(req, res) {
     }
 
     const memoriesResult = await pool.query(
-      `SELECT m.id, m.title, m.content, m.created_at,
+      `SELECT m.id, m.title, m.content, m.created_at, m.status,
               CASE
                 WHEN a.type = 'department' THEN 'department'
                 WHEN a.type = 'batch' THEN 'batch'
@@ -377,10 +377,12 @@ export async function getMyProfile(req, res) {
       department: [],
       batch: [],
       public: [],
+      drafts: [],
     };
 
     for (const memory of memoriesResult.rows) {
-      const groupKey = memory.privacy || "public";
+      const statusKey = memory.status === "draft" ? "drafts" : null;
+      const groupKey = statusKey || memory.privacy || "public";
       if (!groupedMemories[groupKey]) {
         groupedMemories[groupKey] = [];
       }

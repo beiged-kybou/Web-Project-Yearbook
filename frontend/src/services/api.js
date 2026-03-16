@@ -123,7 +123,7 @@ export const clubService = {
 };
 
 export const memoryService = {
-  createMemory: async ({ headline, caption, imageUrls, taggedStudentIds, privacy, clubCode, files = [] }) => {
+  createMemory: async ({ headline, caption, imageUrls, taggedStudentIds, privacy, clubCode, files = [], isDraft = false }) => {
     const token = localStorage.getItem('accessToken');
 
     const formData = new FormData();
@@ -133,6 +133,7 @@ export const memoryService = {
     if (privacy === 'club' && clubCode) {
       formData.append('clubCode', clubCode);
     }
+    formData.append('isDraft', String(isDraft));
     formData.append('imageUrls', JSON.stringify(imageUrls || []));
     formData.append('taggedStudentIds', JSON.stringify(taggedStudentIds || []));
 

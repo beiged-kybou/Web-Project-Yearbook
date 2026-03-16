@@ -39,7 +39,9 @@ const Dashboard = () => {
     const [profileSuccess, setProfileSuccess] = useState('');
     const [profileForm, setProfileForm] = useState({ displayPhoto: '', motto: '', bio: '' });
     const [selectedProfileFile, setSelectedProfileFile] = useState(null);
-    const [myMemories, setMyMemories] = useState({ department: [], batch: [], public: [] });
+    const [myMemories, setMyMemories] = useState({ department: [], batch: [], public: [], drafts: [] });
+    const [isDraft, setIsDraft] = useState(false);
+    const [liveValidation, setLiveValidation] = useState({ headline: '', caption: '' });
 
     useEffect(() => {
         const token = localStorage.getItem('accessToken');
@@ -89,7 +91,7 @@ const Dashboard = () => {
                 bio: result.profile?.bio || '',
             });
             setSelectedProfileFile(null);
-            setMyMemories(result.memories || { department: [], batch: [], public: [] });
+            setMyMemories(result.memories || { department: [], batch: [], public: [], drafts: [] });
         } catch (err) {
             setProfileError(err.response?.data?.error || 'Failed to load profile.');
         } finally {
@@ -114,7 +116,7 @@ const Dashboard = () => {
                 bio: result.profile?.bio || '',
             });
             setSelectedProfileFile(null);
-            setMyMemories(result.memories || { department: [], batch: [], public: [] });
+            setMyMemories(result.memories || { department: [], batch: [], public: [], drafts: [] });
             setProfileSuccess('Profile updated successfully.');
             await fetchDashboard();
         } catch (err) {
@@ -172,6 +174,35 @@ const Dashboard = () => {
         setTagSuggestions([]);
     };
 
+    const validateField = (field, value) => {
+        setLiveValidation((prev) => {
+            const next = { ...prev };
+            if (field === 'headline') {
+                if (isDraft && !value.trim()) {
+                    next.headline = '';
+                } else if (value.trim().length < 6) {
+                    next.headline = 'Headline needs at least 6 characters to submit.';
+                } else if (value.trim().length > 120) {
+                    next.headline = 'Headline must stay under 120 characters.';
+                } else {
+                    next.headline = '';
+                }
+            }
+            if (field === 'caption') {
+                if (isDraft && !value.trim()) {
+                    next.caption = '';
+                } else if (value.trim().length < 20) {
+                    next.caption = 'Caption needs at least 20 characters to submit.';
+                } else if (value.trim().length > 1500) {
+                    next.caption = 'Caption must stay under 1500 characters.';
+                } else {
+                    next.caption = '';
+                }
+            }
+            return next;
+        });
+    };
+
     const removeTagStudent = (studentId) => {
         setSelectedTagStudents((prev) => prev.filter((student) => student.student_id !== studentId));
     };
@@ -183,13 +214,18 @@ const Dashboard = () => {
 
         const trimmedHeadline = headline.trim();
         const trimmedCaption = caption.trim();
-        if (!trimmedHeadline) {
-            setPostError('Headline is required.');
-            return;
-        }
+        if (!isDraft) {
+            if (!trimmedHeadline) {
+                setPostError('Headline is required.');
+                return;
+            }
 
-        if (!trimmedCaption) {
-            setPostError('Caption is required.');
+            if (!trimmedCaption) {
+                setPostError('Caption is required.');
+                return;
+            }
+        } else if (!trimmedHeadline && !trimmedCaption && selectedFiles.length === 0 && imageUrlsInput.trim().length === 0) {
+            setPostError('Draft must include at least text or an image.');
             return;
         }
 
@@ -210,13 +246,15 @@ const Dashboard = () => {
                 taggedStudentIds,
                 privacy: postPrivacy,
                 clubCode: postPrivacy === 'club' ? selectedClubCode : undefined,
+                isDraft,
             });
 
             const skipped = result.tagsSkipped?.length
                 ? ` Some tags were skipped: ${result.tagsSkipped.join(', ')}.`
                 : '';
 
-            setPostSuccess(`Posted successfully.${skipped}`);
+            const draftNote = result.memory?.status === 'draft' ? ' Draft saved.' : '';
+            setPostSuccess(`${result.message || 'Done.'}${draftNote}${skipped}`.trim());
             setHeadline('');
             setCaption('');
             setImageUrlsInput('');
@@ -225,6 +263,8 @@ const Dashboard = () => {
             setSelectedTagStudents([]);
             setTagSuggestions([]);
             setSelectedClubCode('');
+            setIsDraft(false);
+            setLiveValidation({ headline: '', caption: '' });
             setActiveTab(postPrivacy === 'club' ? 'department' : postPrivacy);
             setShowPostModal(false);
             await fetchDashboard();
@@ -420,7 +460,24 @@ const Dashboard = () => {
 
                         <form onSubmit={handlePublishMemory} className="composer-form">
                             <div className="form-group">
-                                <label htmlFor="postPrivacy">Privacy</label>
+                                <div className="privacy-row">
+                                    <label htmlFor="postPrivacy">Privacy</label>
+                                    <label className="draft-toggle">
+                                        <input
+                                            type="checkbox"
+                                            checked={isDraft}
+                                            onChange={(event) => {
+                                                const checked = event.target.checked;
+                                                setIsDraft(checked);
+                                                if (!checked) {
+                                                    validateField('headline', headline);
+                                                    validateField('caption', caption);
+                                                }
+                                            }}
+                                        />
+                                        <span>Save as draft</span>
+                                    </label>
+                                </div>
                                 <select
                                     id="postPrivacy"
                                     value={postPrivacy}
@@ -474,10 +531,17 @@ const Dashboard = () => {
                                     id="headline"
                                     type="text"
                                     value={headline}
-                                    onChange={(event) => setHeadline(event.target.value)}
+                                    onChange={(event) => {
+                                        const value = event.target.value;
+                                        setHeadline(value);
+                                        validateField('headline', value);
+                                    }}
                                     placeholder="Write a short headline"
-                                    required
+                                    required={!isDraft}
                                 />
+                                {liveValidation.headline && (
+                                    <small className="composer-hint error-hint">{liveValidation.headline}</small>
+                                )}
                             </div>
 
                             <div className="form-group">
@@ -485,11 +549,18 @@ const Dashboard = () => {
                                 <textarea
                                     id="caption"
                                     value={caption}
-                                    onChange={(event) => setCaption(event.target.value)}
+                                    onChange={(event) => {
+                                        const value = event.target.value;
+                                        setCaption(value);
+                                        validateField('caption', value);
+                                    }}
                                     placeholder="Write your memory caption"
                                     rows={4}
-                                    required
+                                    required={!isDraft}
                                 />
+                                {liveValidation.caption && (
+                                    <small className="composer-hint error-hint">{liveValidation.caption}</small>
+                                )}
                             </div>
 
                             <div className="form-group">
@@ -704,12 +775,18 @@ const Dashboard = () => {
                                         memories={myMemories.batch || []}
                                         formatDate={formatDate}
                                     />
-                                    <PrivacyMemoryCollection
-                                        title="Public"
-                                        memories={myMemories.public || []}
-                                        formatDate={formatDate}
-                                    />
-                                </div>
+            <PrivacyMemoryCollection
+                title="Public"
+                memories={myMemories.public || []}
+                formatDate={formatDate}
+            />
+            <PrivacyMemoryCollection
+                title="Drafts"
+                memories={myMemories.drafts || []}
+                formatDate={formatDate}
+                isDraft
+            />
+        </div>
                             </>
                         )}
                     </section>
@@ -968,9 +1045,18 @@ const NotificationsPanel = ({ open, onClose, notifications, loading, error, onRe
 const MemoryCard = ({ memory, formatDate }) => {
     const tagged = memory.tagged_students || [];
     const pending = memory.pending_tags || [];
+    const pillText =
+        memory.status === 'draft'
+            ? 'Draft'
+            : memory.status === 'pending'
+                ? 'Pending review'
+                : memory.status === 'rejected'
+                    ? 'Needs edits'
+                    : null;
 
     return (
-        <div className="memory-card">
+        <div className={`memory-card ${pillText ? 'memory-card--draft' : ''}`}>
+            {pillText && <span className="memory-status-pill">{pillText}</span>}
             <div className="memory-content">
                 <h4 className="memory-title">{memory.title}</h4>
                 {memory.content && memory.content !== memory.title && <p className="memory-text">{memory.content}</p>}
@@ -1015,9 +1101,12 @@ const MemoryCard = ({ memory, formatDate }) => {
     );
 };
 
-const PrivacyMemoryCollection = ({ title, memories, formatDate }) => (
+const PrivacyMemoryCollection = ({ title, memories, formatDate, isDraft = false }) => (
     <section className="privacy-memory-group">
-        <h5 className="privacy-memory-title">{title}</h5>
+        <div className="privacy-title-row">
+            <h5 className="privacy-memory-title">{title}</h5>
+            {isDraft && memories.length > 0 && <span className="privacy-memory-pill">Draft</span>}
+        </div>
         {memories.length === 0 ? (
             <p className="privacy-memory-empty">No memories in this group.</p>
         ) : (

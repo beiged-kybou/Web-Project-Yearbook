@@ -73,6 +73,10 @@ CREATE TABLE memories (
     content TEXT,
     created_by VARCHAR(9) REFERENCES students(student_id),
     album_id INTEGER REFERENCES albums(id) ON DELETE CASCADE,
+    status VARCHAR(16) NOT NULL DEFAULT 'pending' CHECK (status IN ('draft', 'pending', 'approved', 'rejected')),
+    moderator_note TEXT,
+    moderated_by UUID REFERENCES users(id),
+    moderated_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

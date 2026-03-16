@@ -18,6 +18,16 @@ const PRIVACY_CONFIG = {
   },
 };
 
+const HEADLINE_LIMITS = {
+  min: 6,
+  max: 120,
+};
+
+const CAPTION_LIMITS = {
+  min: 20,
+  max: 1500,
+};
+
 const normalizeStringArray = (value) => {
   if (Array.isArray(value)) {
     return value
@@ -96,6 +106,73 @@ const isEligibleForPrivacy = (privacy, creator, candidate) => {
   return false;
 };
 
+const coerceBoolean = (value) => {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  if (typeof value === "number") {
+    return value !== 0;
+  }
+
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    return ["true", "1", "yes", "draft"].includes(normalized);
+  }
+
+  return false;
+};
+
+const findDuplicateIds = (ids = []) => {
+  const counts = ids.reduce((acc, id) => {
+    if (!id) {
+      return acc;
+    }
+    const normalized = id.trim();
+    if (!normalized) {
+      return acc;
+    }
+    acc[normalized] = (acc[normalized] || 0) + 1;
+    return acc;
+  }, {});
+
+  return Object.entries(counts)
+    .filter(([, count]) => count > 1)
+    .map(([id]) => id);
+};
+
+const buildValidationErrors = ({ headline, caption, isDraft }) => {
+  const issues = [];
+
+  if (!headline) {
+    if (!isDraft) {
+      issues.push("Headline is required.");
+    }
+  } else {
+    if (headline.length > HEADLINE_LIMITS.max) {
+      issues.push(`Headline must be ${HEADLINE_LIMITS.max} characters or fewer.`);
+    }
+    if (!isDraft && headline.length < HEADLINE_LIMITS.min) {
+      issues.push(`Headline must be at least ${HEADLINE_LIMITS.min} characters.`);
+    }
+  }
+
+  if (!caption) {
+    if (!isDraft) {
+      issues.push("Caption is required.");
+    }
+  } else {
+    if (caption.length > CAPTION_LIMITS.max) {
+      issues.push(`Caption must be ${CAPTION_LIMITS.max} characters or fewer.`);
+    }
+    if (!isDraft && caption.length < CAPTION_LIMITS.min) {
+      issues.push(`Caption must be at least ${CAPTION_LIMITS.min} characters.`);
+    }
+  }
+
+  return issues;
+};
+
 export const createMemory = async (req, res) => {
   const pool = await req.app.locals.getPool();
   const { userId } = req.user;
@@ -110,13 +187,15 @@ export const createMemory = async (req, res) => {
   const taggedStudentIds = [
     ...new Set(normalizeStringArray(req.body.taggedStudentIds)),
   ];
+  const isDraft = coerceBoolean(req.body.isDraft);
 
-  if (!headline) {
-    return res.status(400).json({ error: "Headline is required." });
-  }
+  const validationIssues = buildValidationErrors({ headline, caption, isDraft });
 
-  if (!caption) {
-    return res.status(400).json({ error: "Caption is required." });
+  if (!isDraft && validationIssues.length > 0) {
+    return res.status(400).json({
+      error: "Memory validation failed.",
+      issues: validationIssues,
+    });
   }
 
   const allowedPrivacy = new Set([...Object.keys(PRIVACY_CONFIG), "club"]);
@@ -239,11 +318,12 @@ export const createMemory = async (req, res) => {
       albumId = albumInsertResult.rows[0].id;
     }
 
+    const status = isDraft ? "draft" : "pending";
     const memoryInsertResult = await client.query(
-      `INSERT INTO memories (title, content, created_by, album_id)
-       VALUES ($1, $2, $3, $4)
-       RETURNING id, title, content, created_by, album_id, created_at`,
-      [headline, caption, creatorStudentId, albumId],
+      `INSERT INTO memories (title, content, created_by, album_id, status)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, title, content, created_by, album_id, created_at, status`,
+      [headline || null, caption || null, creatorStudentId, albumId, status],
     );
 
     const memory = memoryInsertResult.rows[0];
@@ -264,8 +344,9 @@ export const createMemory = async (req, res) => {
       );
     }
 
+    const duplicateTaggedIds = findDuplicateIds(taggedStudentIds);
     const cleanTagIds = taggedStudentIds.filter(
-      (studentId) => studentId !== creatorStudentId,
+      (studentId) => studentId && studentId !== creatorStudentId,
     );
 
     let existingTaggedRows = [];
@@ -329,7 +410,9 @@ export const createMemory = async (req, res) => {
     await client.query("COMMIT");
 
     return res.status(201).json({
-      message: "Memory published successfully.",
+      message: isDraft
+        ? "Memory saved as draft."
+        : "Memory submitted for review.",
       memory,
       privacy,
       imagesAdded: combinedImageUrls.length,
@@ -339,7 +422,9 @@ export const createMemory = async (req, res) => {
       tagsSkipped: [...invalidTaggedStudentIds, ...outOfPrivacyGroupTagIds],
       outOfPrivacyGroupTagIds,
       invalidTaggedStudentIds,
+      duplicateTaggedIds,
       clubCode: privacy === "club" ? clubContext?.code : null,
+      issues: validationIssues,
     });
   } catch (error) {
     await client.query("ROLLBACK");
