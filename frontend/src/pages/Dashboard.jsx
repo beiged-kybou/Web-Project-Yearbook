@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { clubService, dashboardService, memoryService, studentService, tagNotificationService } from '../services/api';
 import './Dashboard.css';
 
@@ -736,6 +737,14 @@ const Dashboard = () => {
                             <span className="welcome-badge id-badge">
                                 {user.studentId}
                             </span>
+                        </div>
+                        <div className="welcome-actions">
+                            <Link to="/batches" className="timeline-link">
+                                Explore Batch Timeline →
+                            </Link>
+                            <Link to="/directory" className="timeline-link">
+                                Browse Student Directory →
+                            </Link>
                         </div>
                     </div>
                 </div>

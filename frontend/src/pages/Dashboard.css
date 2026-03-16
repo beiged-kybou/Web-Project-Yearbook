@@ -164,6 +164,28 @@
   flex-wrap: wrap;
 }
 
+.welcome-actions {
+  margin-top: 1.5rem;
+  text-align: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  justify-content: center;
+}
+
+.timeline-link {
+  color: var(--accent-forest);
+  font-weight: 600;
+  text-decoration: none;
+  border-bottom: 2px dashed var(--accent-forest-light);
+  padding-bottom: 0.1rem;
+}
+
+.timeline-link:hover {
+  color: var(--accent-burgundy);
+  border-color: var(--accent-burgundy);
+}
+
 .welcome-badge {
   font-family: var(--font-body);
   font-size: 1rem;

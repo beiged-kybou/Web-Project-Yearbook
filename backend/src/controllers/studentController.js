@@ -1,5 +1,20 @@
 import cloudinary from "../config/cloudinary.js";
 
+const mapStudentRow = (row) => ({
+  studentId: row.student_id,
+  firstName: row.first_name,
+  lastName: row.last_name,
+  email: row.email,
+  department: row.department,
+  departmentName: row.department_name,
+  graduationYear: row.graduation_year,
+  photoUrl: row.photo_url,
+  bio: row.bio,
+  motto: row.motto,
+  phone: row.phone,
+  updatedAt: row.updated_at,
+});
+
 const uploadBufferToCloudinary = (buffer, folder = "iut-yearbook/profiles") =>
   new Promise((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
@@ -22,10 +37,78 @@ const uploadBufferToCloudinary = (buffer, folder = "iut-yearbook/profiles") =>
 export async function getAllStudents(req, res) {
   try {
     const pool = await req.app.locals.getPool();
-    const result = await pool.query(
-      "SELECT * FROM students ORDER BY student_id ASC",
+    const {
+      search = "",
+      department = "",
+      batch,
+      limit = 24,
+      page = 1,
+    } = req.query;
+
+    const pageSize = Math.min(Math.max(Number(limit) || 24, 6), 60);
+    const currentPage = Math.max(Number(page) || 1, 1);
+    const offset = (currentPage - 1) * pageSize;
+
+    const filters = [];
+    const values = [];
+
+    if (search.trim()) {
+      values.push(`%${search.trim().toLowerCase()}%`);
+      values.push(`%${search.trim()}%`);
+      filters.push(
+        `(LOWER(s.first_name) LIKE $${values.length - 1}
+          OR LOWER(s.last_name) LIKE $${values.length - 1}
+          OR LOWER(s.first_name || ' ' || s.last_name) LIKE $${values.length - 1}
+          OR s.student_id LIKE $${values.length})`,
+      );
+    }
+
+    if (department.trim()) {
+      values.push(department.trim().toUpperCase());
+      filters.push(`s.department = $${values.length}`);
+    }
+
+    if (batch && Number(batch)) {
+      values.push(Number(batch));
+      filters.push(`s.graduation_year = $${values.length}`);
+    }
+
+    const whereClause = filters.length > 0 ? `WHERE ${filters.join(" AND ")}` : "";
+
+    const countResult = await pool.query(
+      `SELECT COUNT(*) AS total FROM students s ${whereClause}`,
+      values,
     );
-    res.json(result.rows);
+
+    const total = Number(countResult.rows[0]?.total || 0);
+
+    const result = await pool.query(
+      `SELECT s.student_id, s.first_name, s.last_name, s.email, s.phone,
+              s.department, d.name AS department_name, s.photo_url, s.bio,
+              s.motto, s.graduation_year, s.updated_at
+       FROM students s
+       LEFT JOIN departments d ON d.code = s.department
+       ${whereClause}
+       ORDER BY s.graduation_year DESC NULLS LAST, s.first_name ASC
+       LIMIT $${values.length + 1}
+       OFFSET $${values.length + 2}`,
+      [...values, pageSize, offset],
+    );
+
+    res.json({
+      students: result.rows.map(mapStudentRow),
+      pagination: {
+        total,
+        page: currentPage,
+        limit: pageSize,
+        totalPages: Math.ceil(total / pageSize),
+      },
+      filters: {
+        search: search.trim(),
+        department: department.trim().toUpperCase(),
+        batch: batch ? Number(batch) : null,
+      },
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

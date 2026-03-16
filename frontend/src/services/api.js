@@ -45,6 +45,23 @@ export const dashboardService = {
   },
 };
 
+export const batchService = {
+  list: async () => {
+    const token = localStorage.getItem('accessToken');
+    const response = await api.get('/batches', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  get: async (year) => {
+    const token = localStorage.getItem('accessToken');
+    const response = await api.get(`/batches/${year}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+};
+
 export const clubService = {
   listClubs: async () => {
     const response = await api.get('/clubs');
@@ -129,6 +146,20 @@ export const tagNotificationService = {
 export const notificationService = tagNotificationService;
 
 export const studentService = {
+  list: async ({ search = '', department = '', batch, page = 1, limit = 24 } = {}) => {
+    const token = localStorage.getItem('accessToken');
+    const response = await api.get('/students', {
+      params: {
+        search: search || undefined,
+        department: department || undefined,
+        batch: batch || undefined,
+        page,
+        limit,
+      },
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
   searchStudents: async (query) => {
     const response = await api.get('/students/search', {
       params: { name: query },
