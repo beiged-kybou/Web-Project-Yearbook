@@ -11,6 +11,7 @@ import studentRoutes from "./routes/studentRoutes.js";
 import clubRoutes from "./routes/clubRoutes.js";
 import tagNotificationRoutes from "./routes/tagNotificationRoutes.js";
 import batchRoutes from "./routes/batchRoutes.js";
+import adminRoutes from "./routes/adminRoutes.js";
 
 dotenv.config();
 const app = express();
@@ -29,6 +30,7 @@ app.use("/api/memories", memoryRoutes);
 app.use("/api/clubs", clubRoutes);
 app.use("/api/tag-notifications", tagNotificationRoutes);
 app.use("/api/batches", batchRoutes);
+app.use("/api/admin", adminRoutes);
 
 app.use("/uploads", express.static("uploads"));
 

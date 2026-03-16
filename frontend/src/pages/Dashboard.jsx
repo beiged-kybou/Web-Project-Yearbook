@@ -745,6 +745,11 @@ const Dashboard = () => {
                             <Link to="/directory" className="timeline-link">
                                 Browse Student Directory →
                             </Link>
+                            {user.role === 'admin' && (
+                                <Link to="/admin" className="timeline-link">
+                                    Open Admin Console →
+                                </Link>
+                            )}
                         </div>
                     </div>
                 </div>

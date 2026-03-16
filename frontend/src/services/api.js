@@ -45,6 +45,38 @@ export const dashboardService = {
   },
 };
 
+export const adminService = {
+  getDashboard: async () => {
+    const token = localStorage.getItem('accessToken');
+    const response = await api.get('/admin/dashboard', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  decideMemory: async (memoryId, decision, note) => {
+    const token = localStorage.getItem('accessToken');
+    const response = await api.post(
+      `/admin/memories/${memoryId}/decision`,
+      { decision, note },
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    );
+    return response.data;
+  },
+  decideTag: async (tagId, decision, note) => {
+    const token = localStorage.getItem('accessToken');
+    const response = await api.post(
+      `/admin/tags/${tagId}/decision`,
+      { decision, note },
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    );
+    return response.data;
+  },
+};
+
 export const batchService = {
   list: async () => {
     const token = localStorage.getItem('accessToken');
