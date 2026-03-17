@@ -797,7 +797,6 @@ const Dashboard = () => {
                                                         order: currentCount + index,
                                                     };
                                                 });
-                                                setImageQueue((prev) => [...prev, ...staged]);
                                                 setImageQueue((prev) => {
                                                     const next = [...prev, ...staged];
                                                     setImageLayout(buildImageLayoutFromQueue(next));
@@ -831,18 +830,6 @@ const Dashboard = () => {
                                                         return;
                                                     }
                                                     const queueId = getQueueId('url');
-                                                    setImageQueue((prev) => {
-                                                        const updatedCount = prev.length + 1;
-                                                        const next = [
-                                                            ...prev,
-                                                            {
-                                                                queueId,
-                                                                source: 'url',
-                                                                url: trimmed,
-                                                                label: truncateLabel(trimmed),
-                                                                order: prev.length,
-                                                            },
-                                                        ];
                                                     setImageQueue((prev) => {
                                                         const next = [
                                                             ...prev,
