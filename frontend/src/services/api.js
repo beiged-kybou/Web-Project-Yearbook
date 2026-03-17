@@ -123,7 +123,7 @@ export const clubService = {
 };
 
 export const memoryService = {
-  createMemory: async ({ headline, caption, imageUrls, taggedStudentIds, privacy, clubCode, files = [], isDraft = false }) => {
+  createMemory: async ({ headline, caption, imageUrls, taggedStudentIds, privacy, clubCode, files = [], keptImages = [], removedImageIds = [], imageLayout = [], isDraft = false }) => {
     const token = localStorage.getItem('accessToken');
 
     const formData = new FormData();
@@ -136,6 +136,9 @@ export const memoryService = {
     formData.append('isDraft', String(isDraft));
     formData.append('imageUrls', JSON.stringify(imageUrls || []));
     formData.append('taggedStudentIds', JSON.stringify(taggedStudentIds || []));
+    formData.append('keptImages', JSON.stringify(keptImages || []));
+    formData.append('removedImageIds', JSON.stringify(removedImageIds || []));
+    formData.append('imageLayout', JSON.stringify(imageLayout || []));
 
     files.forEach((file) => {
       formData.append('images', file);
@@ -160,7 +163,7 @@ export const memoryService = {
     });
     return response.data;
   },
-  updateDraft: async (draftId, { action = 'save', headline, caption, imageUrls, taggedStudentIds, privacy, clubCode, files = [] }) => {
+  updateDraft: async (draftId, { action = 'save', headline, caption, imageUrls, taggedStudentIds, privacy, clubCode, files = [], keptImages = [], removedImageIds = [], imageLayout = [] }) => {
     const token = localStorage.getItem('accessToken');
 
     const formData = new FormData();
@@ -176,6 +179,15 @@ export const memoryService = {
     }
     if (taggedStudentIds) {
       formData.append('taggedStudentIds', JSON.stringify(taggedStudentIds));
+    }
+    if (keptImages) {
+      formData.append('keptImages', JSON.stringify(keptImages));
+    }
+    if (removedImageIds) {
+      formData.append('removedImageIds', JSON.stringify(removedImageIds));
+    }
+    if (imageLayout) {
+      formData.append('imageLayout', JSON.stringify(imageLayout));
     }
 
     files.forEach((file) => {

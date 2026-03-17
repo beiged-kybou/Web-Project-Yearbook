@@ -173,6 +173,90 @@ const buildValidationErrors = ({ headline, caption, isDraft }) => {
   return issues;
 };
 
+const parseJsonArray = (value) => {
+  if (Array.isArray(value)) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return [];
+    }
+
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) {
+        return parsed;
+      }
+    } catch {
+      return [];
+    }
+  }
+
+  return [];
+};
+
+const sanitizeUrlArray = (values = []) =>
+  values
+    .filter((value) => typeof value === "string")
+    .map((value) => value.trim())
+    .filter(isLikelyUrl);
+
+const parseImageLayout = (value) => {
+  const entries = parseJsonArray(value);
+  return entries
+    .map((entry) => ({
+      type: typeof entry?.type === "string" ? entry.type : "",
+      index: Number(entry?.index),
+    }))
+    .filter(
+      (entry) =>
+        ["existing", "url", "file"].includes(entry.type) &&
+        Number.isInteger(entry.index) &&
+        entry.index >= 0,
+    );
+};
+
+const buildImagesFromLayout = (layout, buckets) => {
+  const fallback = [
+    ...(buckets.existing || []),
+    ...(buckets.url || []),
+    ...(buckets.file || []),
+  ];
+
+  if (!layout || layout.length === 0) {
+    return fallback;
+  }
+
+  const ordered = [];
+  layout.forEach((entry) => {
+    const bucket = buckets[entry.type];
+    if (!bucket) {
+      return;
+    }
+
+    const value = bucket[entry.index];
+    if (typeof value === "string" && value.length > 0) {
+      ordered.push(value);
+    }
+  });
+
+  if (ordered.length === 0) {
+    return fallback;
+  }
+
+  return ordered;
+};
+
+const sanitizeExistingImagePayload = (entries = []) =>
+  entries
+    .map((entry) => ({
+      id: Number(entry?.id),
+      url: typeof entry?.url === "string" ? entry.url.trim() : "",
+    }))
+    .filter((entry) => Number.isInteger(entry.id) && entry.id > 0 && isLikelyUrl(entry.url));
+
 export const createMemory = async (req, res) => {
   const pool = await req.app.locals.getPool();
   const { userId } = req.user;
@@ -181,9 +265,9 @@ export const createMemory = async (req, res) => {
   const caption = req.body.caption?.trim();
   const privacy = (req.body.privacy || "public").trim().toLowerCase();
   const clubCode = req.body.clubCode?.trim();
-  const imageUrls = normalizeStringArray(req.body.imageUrls).filter(
-    isLikelyUrl,
-  );
+  const existingImages = sanitizeExistingImagePayload(parseJsonArray(req.body.keptImages));
+  const imageUrls = sanitizeUrlArray(parseJsonArray(req.body.imageUrls));
+  const layout = parseImageLayout(req.body.imageLayout);
   const taggedStudentIds = [
     ...new Set(normalizeStringArray(req.body.taggedStudentIds)),
   ];
@@ -334,13 +418,19 @@ export const createMemory = async (req, res) => {
       uploadedImageUrls.push(uploadResult.secure_url);
     }
 
-    const combinedImageUrls = [...uploadedImageUrls, ...imageUrls];
+    const buckets = {
+      existing: existingImages.map((image) => image.url),
+      url: imageUrls,
+      file: uploadedImageUrls,
+    };
 
-    for (let index = 0; index < combinedImageUrls.length; index += 1) {
+    const orderedImageUrls = buildImagesFromLayout(layout, buckets);
+
+    for (let index = 0; index < orderedImageUrls.length; index += 1) {
       await client.query(
         `INSERT INTO images (entity_type, entity_id, photo_url, sort_order)
          VALUES ('memory', $1, $2, $3)`,
-        [String(memory.id), combinedImageUrls[index], index],
+        [String(memory.id), orderedImageUrls[index], index],
       );
     }
 
@@ -415,7 +505,7 @@ export const createMemory = async (req, res) => {
         : "Memory submitted for review.",
       memory,
       privacy,
-      imagesAdded: combinedImageUrls.length,
+      imagesAdded: orderedImageUrls.length,
       uploadedFiles: uploadedImageUrls.length,
       linkedImageUrls: imageUrls.length,
       tagsPendingApproval: eligibleTaggedIds,
@@ -495,7 +585,12 @@ export const updateDraft = async (req, res) => {
   const caption = req.body.caption?.trim();
   const privacy = req.body.privacy?.trim().toLowerCase();
   const clubCode = req.body.clubCode?.trim();
-  const imageUrls = normalizeStringArray(req.body.imageUrls).filter(isLikelyUrl);
+  const imageUrls = sanitizeUrlArray(parseJsonArray(req.body.imageUrls));
+  const keptImages = sanitizeExistingImagePayload(parseJsonArray(req.body.keptImages));
+  const removedImageIds = parseJsonArray(req.body.removedImageIds)
+    .map((value) => Number(value))
+    .filter((value) => Number.isInteger(value) && value > 0);
+  const layout = parseImageLayout(req.body.imageLayout);
   const taggedStudentIds = [
     ...new Set(normalizeStringArray(req.body.taggedStudentIds)),
   ];
@@ -644,24 +739,40 @@ export const updateDraft = async (req, res) => {
       [headline || null, caption || null, albumId, nextStatus, draft.id],
     );
 
-    if (Array.isArray(req.body.replaceImages) && req.body.replaceImages.includes("all")) {
-      await client.query(`DELETE FROM images WHERE entity_type = 'memory' AND entity_id = $1`, [draft.id]);
-    }
-
     const uploadedImageUrls = [];
     for (const file of req.files || []) {
       const uploadResult = await uploadBufferToCloudinary(file.buffer);
       uploadedImageUrls.push(uploadResult.secure_url);
     }
 
-    const combinedImageUrls = [...uploadedImageUrls, ...imageUrls];
-    if (combinedImageUrls.length > 0) {
+    const buckets = {
+      existing: keptImages.map((image) => image.url),
+      url: imageUrls,
+      file: uploadedImageUrls,
+    };
+
+    const finalImageOrder = buildImagesFromLayout(layout, buckets);
+
+    if (removedImageIds.length > 0) {
+      await client.query(
+        `DELETE FROM images WHERE entity_type = 'memory' AND entity_id = $1 AND id = ANY($2::int[])`,
+        [draft.id, removedImageIds],
+      );
+    }
+
+    if (
+      finalImageOrder.length > 0 ||
+      removedImageIds.length > 0 ||
+      uploadedImageUrls.length > 0 ||
+      imageUrls.length > 0 ||
+      keptImages.length > 0
+    ) {
       await client.query(`DELETE FROM images WHERE entity_type = 'memory' AND entity_id = $1`, [draft.id]);
-      for (let index = 0; index < combinedImageUrls.length; index += 1) {
+      for (let index = 0; index < finalImageOrder.length; index += 1) {
         await client.query(
           `INSERT INTO images (entity_type, entity_id, photo_url, sort_order)
            VALUES ('memory', $1, $2, $3)`,
-          [String(draft.id), combinedImageUrls[index], index],
+         [String(draft.id), finalImageOrder[index], index],
         );
       }
     }

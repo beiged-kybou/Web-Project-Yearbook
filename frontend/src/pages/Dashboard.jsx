@@ -1,8 +1,93 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Link } from 'react-router-dom';
 import { clubService, dashboardService, memoryService, studentService, tagNotificationService } from '../services/api';
+import ImageTray from '../components/ImageTray';
 import './Dashboard.css';
+
+const MAX_UPLOAD_FILES = 10;
+const URL_LABEL_LIMIT = 36;
+const FILE_SIZE_LIMIT_MB = 25;
+const FILE_SIZE_LIMIT_BYTES = FILE_SIZE_LIMIT_MB * 1024 * 1024;
+const DEFAULT_UPLOAD_MESSAGE = 'Stage up to 10 photos. Drag to reorder; the first becomes the cover.';
+const IMAGE_SOURCE_LABELS = {
+    existing: 'Draft',
+    file: 'Upload',
+    url: 'Link',
+};
+const IMAGE_WARNING_LIMIT = 8;
+const computeUploadMessage = (count) =>
+    count >= IMAGE_WARNING_LIMIT
+        ? 'Almost full—double-check your order before posting.'
+        : DEFAULT_UPLOAD_MESSAGE;
+
+const getQueueId = (prefix) => {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        return `${prefix}-${crypto.randomUUID()}`;
+    }
+    return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+};
+
+const isValidImageUrl = (value = '') => /^https?:\/\//i.test(value.trim());
+
+const truncateLabel = (value = '', limit = URL_LABEL_LIMIT) => {
+    if (!value) return '';
+    if (value.length <= limit) return value;
+    return `${value.slice(0, limit - 3)}...`;
+};
+
+const bytesToSize = (bytes) => {
+    if (!bytes && bytes !== 0) return '';
+    const kb = bytes / 1024;
+    if (kb < 1024) {
+        return `${kb.toFixed(1)} KB`;
+    }
+    const mb = kb / 1024;
+    return `${mb.toFixed(1)} MB`;
+};
+
+const getSourceLabel = (source) => IMAGE_SOURCE_LABELS[source] || 'Image';
+const readableSize = (item) => {
+    if (item.source !== 'file') {
+        return null;
+    }
+    if (item.size) {
+        return bytesToSize(item.size);
+    }
+    if (item.file?.size) {
+        return bytesToSize(item.file.size);
+    }
+    return null;
+};
+
+const revokePreview = (item) => {
+    if (item?.source === 'file' && item.preview) {
+        URL.revokeObjectURL(item.preview);
+    }
+};
+
+const reorderQueue = (list, draggedId, targetId, position = 'before') => {
+    if (draggedId === targetId || !draggedId) return list;
+    const draggedIndex = list.findIndex((item) => item.queueId === draggedId);
+    const targetIndex = list.findIndex((item) => item.queueId === targetId);
+    if (draggedIndex === -1) return list;
+    const next = [...list];
+    const [draggedItem] = next.splice(draggedIndex, 1);
+    if (targetIndex === -1) {
+        next.push(draggedItem);
+        return next;
+    }
+    const insertIndex = position === 'after' ? targetIndex + 1 : targetIndex;
+    next.splice(insertIndex, 0, draggedItem);
+    return next;
+};
+
+const buildImageLayoutFromQueue = (queue = []) =>
+    queue.map((item, index) => ({
+        type: item.source === 'file' ? 'file' : item.source,
+        ref: item.source === 'existing' ? item.id : item.source === 'url' ? item.url : item.queueId,
+        index,
+    }));
 
 const Dashboard = () => {
     const navigate = useNavigate();
@@ -13,7 +98,12 @@ const Dashboard = () => {
     const [headline, setHeadline] = useState('');
     const [caption, setCaption] = useState('');
     const [imageUrlsInput, setImageUrlsInput] = useState('');
-    const [selectedFiles, setSelectedFiles] = useState([]);
+    const fileInputRef = useRef(null);
+    const [imageQueue, setImageQueue] = useState([]);
+    const [removedImageIds, setRemovedImageIds] = useState(new Set());
+    const [imageLayout, setImageLayout] = useState([]);
+    const [uploadMessage, setUploadMessage] = useState(DEFAULT_UPLOAD_MESSAGE);
+    const [uploadWarning, setUploadWarning] = useState('');
     const [tagSearch, setTagSearch] = useState('');
     const [selectedTagStudents, setSelectedTagStudents] = useState([]);
     const [tagSuggestions, setTagSuggestions] = useState([]);
@@ -209,13 +299,39 @@ const Dashboard = () => {
         setSelectedTagStudents([]);
         setTagSuggestions([]);
         setSelectedClubCode('');
+        const draftImages = (draft.images || []).map((image, index) => ({
+            id: image.id,
+            url: image.url,
+            name: image.label || image.url,
+            label: truncateLabel(image.label || image.url),
+            source: 'existing',
+            queueId: String(image.id),
+            order: index,
+        }));
+        setImageQueue(draftImages);
+        setRemovedImageIds(new Set());
+        setImageLayout(buildImageLayoutFromQueue(draftImages));
+        setUploadMessage(DEFAULT_UPLOAD_MESSAGE);
+        setUploadWarning('');
+        setImageUrlsInput('');
+        if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+        }
     };
 
     const clearComposer = () => {
         setHeadline('');
         setCaption('');
         setImageUrlsInput('');
-        setSelectedFiles([]);
+        imageQueue.forEach(revokePreview);
+        setImageQueue([]);
+        setRemovedImageIds(new Set());
+        setImageLayout([]);
+        setUploadMessage(DEFAULT_UPLOAD_MESSAGE);
+        setUploadWarning('');
+        if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+        }
         setTagSearch('');
         setSelectedTagStudents([]);
         setTagSuggestions([]);
@@ -272,6 +388,12 @@ const Dashboard = () => {
 
         const trimmedHeadline = headline.trim();
         const trimmedCaption = caption.trim();
+        const imageUrls = imageQueue
+            .filter((item) => item.source === 'url')
+            .map((item) => item.url);
+        const keptImages = imageQueue
+            .filter((item) => item.source === 'existing' && !removedImageIds.has(String(item.id)))
+            .map((item) => ({ id: item.id, url: item.url }));
         if (!isDraft) {
             if (!trimmedHeadline) {
                 setPostError('Headline is required.');
@@ -282,15 +404,12 @@ const Dashboard = () => {
                 setPostError('Caption is required.');
                 return;
             }
-        } else if (!trimmedHeadline && !trimmedCaption && selectedFiles.length === 0 && imageUrlsInput.trim().length === 0) {
+        }
+
+        if (!trimmedHeadline && !trimmedCaption && imageQueue.length === 0) {
             setPostError('Draft must include at least text or an image.');
             return;
         }
-
-        const imageUrls = imageUrlsInput
-            .split(/\n|,/)
-            .map((item) => item.trim())
-            .filter(Boolean);
 
         const taggedStudentIds = selectedTagStudents.map((student) => student.student_id);
 
@@ -306,17 +425,23 @@ const Dashboard = () => {
                     taggedStudentIds,
                     privacy: postPrivacy,
                     clubCode: postPrivacy === 'club' ? selectedClubCode : undefined,
-                    files: selectedFiles,
+                    files: imageQueue.filter((item) => item.source === 'file').map((item) => item.file),
+                    keptImages,
+                    removedImageIds: Array.from(removedImageIds),
+                    imageLayout,
                 });
             } else {
                 result = await memoryService.createMemory({
                     headline: trimmedHeadline,
                     caption: trimmedCaption,
                     imageUrls,
-                    files: selectedFiles,
+                    files: imageQueue.filter((item) => item.source === 'file').map((item) => item.file),
                     taggedStudentIds,
                     privacy: postPrivacy,
                     clubCode: postPrivacy === 'club' ? selectedClubCode : undefined,
+                    keptImages,
+                    removedImageIds: Array.from(removedImageIds),
+                    imageLayout,
                     isDraft,
                 });
             }
@@ -627,33 +752,164 @@ const Dashboard = () => {
                                 )}
                             </div>
 
-                            <div className="form-group">
-                                <label htmlFor="localImages">Upload from device</label>
-                                <input
-                                    id="localImages"
-                                    type="file"
-                                    accept="image/*"
-                                    multiple
-                                    onChange={(event) => {
-                                        const files = Array.from(event.target.files || []);
-                                        setSelectedFiles(files);
-                                    }}
-                                />
-                                {selectedFiles.length > 0 && (
-                                    <small className="composer-hint">
-                                        {selectedFiles.length} file(s) selected.
-                                    </small>
-                                )}
-                            </div>
+                <div className="form-group">
+                    <div className="composer-field-row">
+                        <div className="field-column">
+                            <label htmlFor="localImages">Upload from device</label>
+                                        <input
+                                            id="localImages"
+                                            ref={fileInputRef}
+                                            type="file"
+                                            accept="image/*"
+                                            multiple
+                                            onChange={(event) => {
+                                                const files = Array.from(event.target.files || []);
+                                                if (files.length === 0) {
+                                                    return;
+                                                }
+                                                const currentCount = imageQueue.length;
+                                                const availableSlots = Math.max(MAX_UPLOAD_FILES - currentCount, 0);
+                                                if (availableSlots === 0) {
+                                                    setUploadWarning('Image tray is full. Remove some photos first.');
+                                                    event.target.value = '';
+                                                    return;
+                                                }
+                                                const withinLimit = files.filter((file) => file.size <= FILE_SIZE_LIMIT_BYTES);
+                                                const oversizedCount = files.length - withinLimit.length;
+                                        const trimmed = withinLimit.slice(0, availableSlots);
+                                        const trimmedCount = withinLimit.length - trimmed.length;
+                                                if (oversizedCount > 0) {
+                                                    setUploadWarning(`Skipped ${oversizedCount} large file${oversizedCount > 1 ? 's' : ''} (${FILE_SIZE_LIMIT_MB}MB max).`);
+                                                } else if (trimmedCount > 0) {
+                                                    setUploadWarning('Limit reached. Some files were not added.');
+                                                } else {
+                                                    setUploadWarning('');
+                                                }
+                                                const staged = trimmed.map((file, index) => {
+                                                    const queueId = getQueueId('file');
+                                                    return {
+                                                        queueId,
+                                                        source: 'file',
+                                                        file,
+                                                        name: file.name,
+                                                        size: file.size,
+                                                        preview: URL.createObjectURL(file),
+                                                        order: currentCount + index,
+                                                    };
+                                                });
+                                                setImageQueue((prev) => [...prev, ...staged]);
+                                                setImageQueue((prev) => {
+                                                    const next = [...prev, ...staged];
+                                                    setImageLayout(buildImageLayoutFromQueue(next));
+                                                    setUploadMessage(computeUploadMessage(next.length));
+                                                    return next;
+                                                });
+                                            }}
+                                        />
+                                        {uploadWarning && <small className="composer-hint error-hint">{uploadWarning}</small>}
+                                        <small className="composer-hint">
+                                            {uploadMessage}
+                                        </small>
+                        </div>
+                                    <div className="field-column">
+                                        <label htmlFor="imageUrlInput">Add image link</label>
+                                        <div className="url-inline-field">
+                                            <input
+                                                id="imageUrlInput"
+                                                type="url"
+                                                placeholder="https://example.com/photo.jpg"
+                                                value={imageUrlsInput}
+                                                onChange={(event) => setImageUrlsInput(event.target.value)}
+                                            />
+                                            <button
+                                                type="button"
+                                                className="ghost"
+                                                onClick={() => {
+                                                    const trimmed = imageUrlsInput.trim();
+                                                    if (!isValidImageUrl(trimmed)) {
+                                                        setPostError('Enter a full http(s) image link.');
+                                                        return;
+                                                    }
+                                                    const queueId = getQueueId('url');
+                                                    setImageQueue((prev) => {
+                                                        const updatedCount = prev.length + 1;
+                                                        const next = [
+                                                            ...prev,
+                                                            {
+                                                                queueId,
+                                                                source: 'url',
+                                                                url: trimmed,
+                                                                label: truncateLabel(trimmed),
+                                                                order: prev.length,
+                                                            },
+                                                        ];
+                                                    setImageQueue((prev) => {
+                                                        const next = [
+                                                            ...prev,
+                                                            {
+                                                                queueId,
+                                                                source: 'url',
+                                                                url: trimmed,
+                                                                label: truncateLabel(trimmed),
+                                                                order: prev.length,
+                                                            },
+                                                        ];
+                                                        setImageLayout(buildImageLayoutFromQueue(next));
+                                                        setUploadMessage(computeUploadMessage(next.length));
+                                                        return next;
+                                                    });
+                                                    setUploadWarning('');
+                                                    setImageUrlsInput('');
+                                                }}
+                                            >
+                                                Add
+                                            </button>
+                                        </div>
+                                        <small className="composer-hint">
+                                            Paste a direct image link to keep it sourced from the web.
+                                        </small>
+                                    </div>
+                                </div>
 
-                            <div className="form-group">
-                                <label htmlFor="imageUrls">Image URLs (comma or newline separated)</label>
-                                <textarea
-                                    id="imageUrls"
-                                    value={imageUrlsInput}
-                                    onChange={(event) => setImageUrlsInput(event.target.value)}
-                                    placeholder="https://example.com/image1.jpg"
-                                    rows={3}
+                                <ImageTray
+                                    images={imageQueue}
+                                    maxSlots={MAX_UPLOAD_FILES}
+                                    onDragReorder={(sourceId, targetId, position) => {
+                                        setImageQueue((prev) => {
+                                            const next = reorderQueue(prev, sourceId, targetId, position);
+                                            setImageLayout(buildImageLayoutFromQueue(next));
+                                            setUploadMessage(computeUploadMessage(next.length));
+                                            return next;
+                                        });
+                                    }}
+                                    onRemove={(queueId) => {
+                                        setImageQueue((prev) => {
+                                            const target = prev.find((item) => item.queueId === queueId);
+                                            if (target) {
+                                                revokePreview(target);
+                                                if (target.source === 'existing' && target.id) {
+                                                    setRemovedImageIds((prev) => new Set(prev).add(String(target.id)));
+                                                }
+                                            }
+                                            const next = prev.filter((item) => item.queueId !== queueId);
+                                            setImageLayout(buildImageLayoutFromQueue(next));
+                                            setUploadMessage(computeUploadMessage(next.length));
+                                            return next;
+                                        });
+                                    }}
+                                    onOrderChange={(nextQueue) => {
+                                        setImageQueue(nextQueue);
+                                        setImageLayout(buildImageLayoutFromQueue(nextQueue));
+                                        setUploadMessage(computeUploadMessage(nextQueue.length));
+                                    }}
+                                    renderMeta={(item) => {
+                                        const size = readableSize(item);
+                                        const label = getSourceLabel(item.source);
+                                        if (!size) {
+                                            return label;
+                                        }
+                                        return `${label} · ${size}`;
+                                    }}
                                 />
                             </div>
 
