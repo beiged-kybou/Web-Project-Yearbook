@@ -37,7 +37,8 @@
 .divider-line {
   flex: 1;
   height: 2px;
-  background: linear-gradient(90deg,
+  background: linear-gradient(
+    90deg,
     transparent,
     var(--paper-dark),
     transparent
@@ -66,7 +67,7 @@
 }
 
 .register-link::after {
-  content: '';
+  content: "";
   position: absolute;
   bottom: -2px;
   left: 0;

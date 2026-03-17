@@ -35,14 +35,11 @@ const Login = () => {
         <div className="corner-pin bottom-left"></div>
         <div className="corner-pin bottom-right"></div>
 
-        <div className="login-header">
-          <h1 className="yearbook-title">IUT Yearbook</h1>
-        </div>
-
         {error && <div className="error-message">{error}</div>}
 
         <form onSubmit={handleLogin} className="login-form">
           <div className="form-card">
+            <h1>IUT Yearbook</h1>
             <h2>Sign In</h2>
             <p className="subtitle">Enter your credentials to continue</p>
 
