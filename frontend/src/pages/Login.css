@@ -60,7 +60,7 @@
 
 .register-link {
   color: var(--accent-burgundy);
-  text-decoration: none;
+  text-decoration: underline;
   font-weight: 700;
   position: relative;
   transition: color var(--transition-base);

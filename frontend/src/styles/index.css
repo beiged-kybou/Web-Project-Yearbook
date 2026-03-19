@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@500;600&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@500;600&display=swap");
 
 :root {
   color-scheme: dark;
@@ -30,15 +30,16 @@
   --border-strong: 1px solid var(--cp-surface2);
   --border-accent: 1px solid var(--cp-mauve);
   --shadow-pop:
-    0 0 0 1px rgba(17, 17, 27, 0.8),
-    0 20px 60px rgba(3, 3, 10, 0.65);
+    0 0 0 1px rgba(17, 17, 27, 0.8), 0 20px 60px rgba(3, 3, 10, 0.65);
   --glow-accent: 0 0 25px rgba(137, 212, 235, 0.3);
 
   --transition-fast: 130ms ease-out;
   --transition-base: 200ms ease-out;
 
-  --font-body: 'JetBrains Mono', 'IBM Plex Mono', 'Fira Code', 'SFMono-Regular', monospace;
-  --font-display: 'Space Grotesk', 'JetBrains Mono', 'IBM Plex Mono', sans-serif;
+  --font-body:
+    "JetBrains Mono", "IBM Plex Mono", "Fira Code", "SFMono-Regular", monospace;
+  --font-display:
+    "Space Grotesk", "JetBrains Mono", "IBM Plex Mono", sans-serif;
 
   --radius-xs: 4px;
   --radius-sm: 8px;
@@ -66,7 +67,7 @@ body {
 }
 
 body::after {
-  content: '';
+  content: "";
   position: fixed;
   inset: 0;
   background-image:
@@ -104,7 +105,7 @@ a:hover {
 }
 
 .scrapbook-page::before {
-  content: '';
+  content: "";
   position: absolute;
   inset: 10px;
   border: 1px dashed rgba(148, 226, 213, 0.2);
@@ -164,13 +165,6 @@ button:active {
 button:disabled {
   opacity: 0.4;
   cursor: not-allowed;
-}
-
-button.primary {
-  border-color: var(--cp-mauve);
-  background: var(--cp-mauve);
-  color: var(--cp-crust);
-  box-shadow: var(--glow-accent);
 }
 
 button.primary:hover {
