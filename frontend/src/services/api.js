@@ -123,6 +123,69 @@ export const clubService = {
 };
 
 export const memoryService = {
+  getFeed: async ({ page = 1, limit = 10 } = {}) => {
+    const token = localStorage.getItem('accessToken');
+    const response = await api.get('/memories/feed', {
+      params: { page, limit },
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  react: async (memoryId, reactionType) => {
+    const token = localStorage.getItem('accessToken');
+    const response = await api.post(
+      `/memories/${memoryId}/reactions`,
+      { reactionType },
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    );
+    return response.data;
+  },
+  removeReaction: async (memoryId) => {
+    const token = localStorage.getItem('accessToken');
+    const response = await api.delete(`/memories/${memoryId}/reactions`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  listComments: async (memoryId, { page = 1, limit = 20 } = {}) => {
+    const token = localStorage.getItem('accessToken');
+    const response = await api.get(`/memories/${memoryId}/comments`, {
+      params: { page, limit },
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  addComment: async (memoryId, body) => {
+    const token = localStorage.getItem('accessToken');
+    const response = await api.post(
+      `/memories/${memoryId}/comments`,
+      { body },
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    );
+    return response.data;
+  },
+  updateComment: async (memoryId, commentId, body) => {
+    const token = localStorage.getItem('accessToken');
+    const response = await api.put(
+      `/memories/${memoryId}/comments/${commentId}`,
+      { body },
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    );
+    return response.data;
+  },
+  deleteComment: async (memoryId, commentId) => {
+    const token = localStorage.getItem('accessToken');
+    const response = await api.delete(`/memories/${memoryId}/comments/${commentId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
   createMemory: async ({ headline, caption, imageUrls, taggedStudentIds, privacy, clubCode, files = [], keptImages = [], removedImageIds = [], imageLayout = [], isDraft = false }) => {
     const token = localStorage.getItem('accessToken');
 

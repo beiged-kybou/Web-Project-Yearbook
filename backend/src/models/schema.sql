@@ -86,6 +86,23 @@ CREATE TABLE memory_participants (
     PRIMARY KEY (memory_id, student_id)
 );
 
+CREATE TABLE memory_reactions (
+    memory_id INTEGER NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+    student_id VARCHAR(9) NOT NULL REFERENCES students(student_id) ON DELETE CASCADE,
+    reaction_type VARCHAR(16) NOT NULL DEFAULT 'love',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (memory_id, student_id)
+);
+
+CREATE TABLE memory_comments (
+    id SERIAL PRIMARY KEY,
+    memory_id INTEGER NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+    student_id VARCHAR(9) NOT NULL REFERENCES students(student_id) ON DELETE CASCADE,
+    body TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE images (
     id SERIAL PRIMARY KEY,
     entity_type VARCHAR(20) NOT NULL CHECK (entity_type IN ('student', 'memory')),
@@ -102,6 +119,9 @@ CREATE INDEX idx_images_entity ON images(entity_type, entity_id);
 CREATE INDEX idx_images_entity_order ON images(entity_type, entity_id, sort_order);
 CREATE INDEX idx_users_email ON users(email);
 CREATE INDEX idx_users_google_sub ON users(google_sub);
+CREATE INDEX idx_memories_created_at ON memories(created_at DESC);
+CREATE INDEX idx_memory_reactions_memory ON memory_reactions(memory_id);
+CREATE INDEX idx_memory_comments_memory ON memory_comments(memory_id);
 
 GRANT ALL ON SCHEMA public TO yearbook_db_user;
 GRANT ALL ON ALL TABLES IN SCHEMA public TO yearbook_db_user;

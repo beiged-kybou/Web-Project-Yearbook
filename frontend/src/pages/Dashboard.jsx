@@ -589,6 +589,9 @@ const Dashboard = () => {
                             <span className="user-name">{user.displayName}</span>
                             <span className="user-meta">{user.department} &middot; Batch '{user.batch}</span>
                         </div>
+                        <Link to="/discover" className="discover-link">
+                            Discover
+                        </Link>
                         <button className="profile-btn" onClick={openProfileModal}>
                             Profile
                         </button>

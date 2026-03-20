@@ -5,6 +5,7 @@ import Registration from './pages/Registration'
 import BatchTimeline from './pages/BatchTimeline'
 import StudentDirectory from './pages/StudentDirectory'
 import AdminDashboard from './pages/AdminDashboard'
+import Discover from './pages/Discover'
 
 function App() {
   return (
@@ -13,6 +14,7 @@ function App() {
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Registration />} />
       <Route path="/dashboard" element={<Dashboard />} />
+      <Route path="/discover" element={<Discover />} />
       <Route path="/batches" element={<BatchTimeline />} />
       <Route path="/directory" element={<StudentDirectory />} />
       <Route path="/admin" element={<AdminDashboard />} />

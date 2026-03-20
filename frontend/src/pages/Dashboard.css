@@ -102,6 +102,17 @@ body::before {
   letter-spacing: 0.14em;
 }
 
+.discover-link {
+  text-decoration: none;
+  padding: 0.45rem 0.9rem;
+  border-radius: 6px;
+  border: var(--tui-border);
+  background: var(--tui-col-base);
+  color: var(--tui-col-accent);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
 .profile-trigger {
   padding: 0;
   border: none;

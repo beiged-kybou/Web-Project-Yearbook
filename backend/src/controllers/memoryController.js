@@ -833,3 +833,511 @@ export const createPublicMemory = (req, res) => {
   req.body = { ...req.body, privacy: "public" };
   return createMemory(req, res);
 };
+
+const FEED_PAGE_SIZE = 10;
+const DEFAULT_REACTION_TYPE = "love";
+
+const fetchViewerProfile = async (pool, userId) => {
+  const result = await pool.query(
+    `SELECT u.student_id, s.department, s.graduation_year
+     FROM users u
+     LEFT JOIN students s ON u.student_id = s.student_id
+     WHERE u.id = $1`,
+    [userId],
+  );
+
+  return result.rows[0];
+};
+
+const buildFeedVisibilityClause = (viewer) => {
+  if (!viewer?.student_id) {
+    return {
+      clause: "m.created_by IS NULL",
+      params: [],
+    };
+  }
+
+  const params = [viewer.student_id, viewer.department, viewer.graduation_year];
+  return {
+    clause: `(
+      m.created_by = $1
+      OR (sel.album_type = 'public')
+      OR (sel.album_type = 'department' AND $2 IS NOT NULL AND s.department = $2)
+      OR (sel.album_type = 'batch' AND $3 IS NOT NULL AND s.graduation_year = $3)
+      OR (sel.album_type = 'club' AND EXISTS (
+        SELECT 1
+        FROM club_members cm
+        JOIN clubs c ON cm.club_id = c.id
+        WHERE cm.student_id = $1 AND c.id = sel.album_club_id
+      ))
+    )`,
+    params,
+  };
+};
+
+const baseFeedQuery = `
+  WITH selected_memories AS (
+    SELECT m.id,
+           m.title,
+           m.content,
+           m.created_at,
+           m.status,
+           m.album_id,
+           m.created_by,
+           a.type AS album_type,
+           CASE WHEN a.type = 'club' THEN a.id END AS album_club_id,
+           s.first_name,
+           s.last_name,
+           s.department,
+           s.graduation_year,
+           s.photo_url,
+           u.display_name,
+           u.avatar_url
+    FROM memories m
+    LEFT JOIN albums a ON a.id = m.album_id
+    LEFT JOIN students s ON m.created_by = s.student_id
+    LEFT JOIN users u ON u.student_id = s.student_id
+    WHERE m.status = 'approved'
+  )
+  SELECT sel.*,
+         COALESCE(
+           (
+             SELECT json_agg(json_build_object('id', i.id, 'url', i.photo_url, 'sort', i.sort_order)
+                             ORDER BY i.sort_order)
+             FROM images i
+             WHERE i.entity_type = 'memory' AND i.entity_id = sel.id::text
+           ),
+           '[]'::json
+         ) AS images,
+         (
+           SELECT json_build_object(
+             'counts', COALESCE(json_object_agg(reaction_type, total), '{}'::json),
+             'viewer', (
+               SELECT reaction_type
+               FROM memory_reactions mr
+               WHERE mr.memory_id = sel.id AND mr.student_id = $4
+             )
+           )
+           FROM (
+             SELECT reaction_type, COUNT(*) AS total
+             FROM memory_reactions
+             WHERE memory_id = sel.id
+             GROUP BY reaction_type
+           ) AS reaction_counts
+         ) AS reactions,
+         (
+           SELECT json_agg(
+                    json_build_object(
+                      'id', c.id,
+                      'body', c.body,
+                      'created_at', c.created_at,
+                      'updated_at', c.updated_at,
+                      'student', json_build_object(
+                         'student_id', cs.student_id,
+                         'first_name', cs.first_name,
+                         'last_name', cs.last_name,
+                         'photo_url', cs.photo_url
+                       )
+                    )
+                    ORDER BY c.created_at DESC
+                    LIMIT 5
+                  )
+           FROM memory_comments c
+           JOIN students cs ON cs.student_id = c.student_id
+           WHERE c.memory_id = sel.id
+         ) AS comments_preview,
+         (
+           SELECT COUNT(*) FROM memory_comments WHERE memory_id = sel.id
+         ) AS comment_count
+  FROM selected_memories sel
+  WHERE %VISIBILITY%
+  ORDER BY sel.created_at DESC
+  LIMIT $5 OFFSET $6
+`;
+
+const hydrateFeedMemories = (rows) =>
+  rows.map((row) => ({
+    id: row.id,
+    title: row.title,
+    content: row.content,
+    createdAt: row.created_at,
+    albumId: row.album_id,
+    albumType: row.album_type,
+    status: row.status,
+    creator: {
+      studentId: row.created_by,
+      firstName: row.first_name,
+      lastName: row.last_name,
+      displayName: row.display_name,
+      avatarUrl: row.avatar_url,
+      photoUrl: row.photo_url,
+      department: row.department,
+      graduationYear: row.graduation_year,
+    },
+    images: row.images || [],
+    reactions: {
+      counts: row.reactions?.counts || {},
+      viewer: row.reactions?.viewer || null,
+    },
+    commentsPreview: row.comments_preview || [],
+    commentCount: Number(row.comment_count || 0),
+  }));
+
+export const listFeed = async (req, res) => {
+  const pool = await req.app.locals.getPool();
+  const { userId } = req.user;
+  const page = Math.max(Number(req.query.page) || 1, 1);
+  const limit = Math.min(Math.max(Number(req.query.limit) || FEED_PAGE_SIZE, 5), 30);
+  const offset = (page - 1) * limit;
+
+  try {
+    const viewer = await fetchViewerProfile(pool, userId);
+    if (!viewer?.student_id) {
+      return res.status(400).json({ error: "Complete your student profile to view the feed." });
+    }
+
+    const { clause, params } = buildFeedVisibilityClause(viewer);
+    const query = baseFeedQuery.replace("%VISIBILITY%", clause);
+
+    const result = await pool.query(query, [...params, viewer.student_id, limit, offset]);
+
+    res.status(200).json({
+      page,
+      limit,
+      memories: hydrateFeedMemories(result.rows),
+      viewer: {
+        studentId: viewer.student_id,
+        department: viewer.department,
+        graduationYear: viewer.graduation_year,
+      },
+    });
+  } catch (error) {
+    console.error("Feed error", error);
+    res.status(500).json({ error: "Failed to load feed." });
+  }
+};
+
+const assertMemoryVisibility = async (pool, memoryId, userId) => {
+  const viewer = await fetchViewerProfile(pool, userId);
+  if (!viewer?.student_id) {
+    throw new Error("PROFILE_REQUIRED");
+  }
+
+  const result = await pool.query(
+    `SELECT m.id,
+            m.created_by,
+            a.type AS album_type,
+            CASE WHEN a.type = 'club' THEN a.id END AS album_club_id,
+            s.department,
+            s.graduation_year
+     FROM memories m
+     LEFT JOIN albums a ON a.id = m.album_id
+     LEFT JOIN students s ON m.created_by = s.student_id
+     WHERE m.id = $1 AND m.status = 'approved'
+    `,
+    [memoryId],
+  );
+
+  if (result.rows.length === 0) {
+    throw new Error("NOT_FOUND");
+  }
+
+  const memory = result.rows[0];
+  const { clause, params } = buildFeedVisibilityClause(viewer);
+  const visibilityResult = await pool.query(
+    `SELECT 1 FROM memories m
+     LEFT JOIN albums a ON a.id = m.album_id
+     LEFT JOIN students s ON m.created_by = s.student_id
+     WHERE m.id = $1 AND ${clause}
+    `,
+    [memoryId, ...params],
+  );
+
+  if (visibilityResult.rows.length === 0) {
+    throw new Error("FORBIDDEN");
+  }
+
+  return { viewer, memory };
+};
+
+export const upsertReaction = async (req, res) => {
+  const pool = await req.app.locals.getPool();
+  const { userId } = req.user;
+  const { memoryId } = req.params;
+  const reactionType = (req.body.reactionType || DEFAULT_REACTION_TYPE).trim().toLowerCase();
+
+  const allowed = new Set(["love", "wow", "support"]);
+  if (!allowed.has(reactionType)) {
+    return res.status(400).json({ error: "reactionType must be love, wow, or support" });
+  }
+
+  try {
+    const { viewer } = await assertMemoryVisibility(pool, memoryId, userId);
+
+    await pool.query(
+      `INSERT INTO memory_reactions (memory_id, student_id, reaction_type)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (memory_id, student_id)
+       DO UPDATE SET reaction_type = EXCLUDED.reaction_type, created_at = NOW()`,
+      [memoryId, viewer.student_id, reactionType],
+    );
+
+    const countsResult = await pool.query(
+      `SELECT reaction_type, COUNT(*) AS total
+       FROM memory_reactions
+       WHERE memory_id = $1
+       GROUP BY reaction_type`,
+      [memoryId],
+    );
+
+    return res.status(200).json({
+      memoryId: Number(memoryId),
+      reactionType,
+      viewerReaction: reactionType,
+      counts: countsResult.rows.reduce((acc, row) => {
+        acc[row.reaction_type] = Number(row.total);
+        return acc;
+      }, {}),
+    });
+  } catch (error) {
+    if (error.message === "PROFILE_REQUIRED") {
+      return res.status(400).json({ error: "Link your student profile first." });
+    }
+    if (error.message === "NOT_FOUND") {
+      return res.status(404).json({ error: "Memory not found." });
+    }
+    if (error.message === "FORBIDDEN") {
+      return res.status(403).json({ error: "You cannot react to this memory." });
+    }
+    console.error("Reaction error", error);
+    return res.status(500).json({ error: "Failed to update reaction." });
+  }
+};
+
+export const deleteReaction = async (req, res) => {
+  const pool = await req.app.locals.getPool();
+  const { userId } = req.user;
+  const { memoryId } = req.params;
+
+  try {
+    const { viewer } = await assertMemoryVisibility(pool, memoryId, userId);
+    await pool.query(`DELETE FROM memory_reactions WHERE memory_id = $1 AND student_id = $2`, [memoryId, viewer.student_id]);
+    return res.status(200).json({ memoryId: Number(memoryId), reactionRemoved: true });
+  } catch (error) {
+    if (error.message === "PROFILE_REQUIRED") {
+      return res.status(400).json({ error: "Link your student profile first." });
+    }
+    if (error.message === "NOT_FOUND") {
+      return res.status(404).json({ error: "Memory not found." });
+    }
+    if (error.message === "FORBIDDEN") {
+      return res.status(403).json({ error: "You cannot remove reactions from this memory." });
+    }
+    console.error("Remove reaction error", error);
+    return res.status(500).json({ error: "Failed to remove reaction." });
+  }
+};
+
+const COMMENT_LIMITS = { min: 3, max: 600 };
+
+const validateCommentBody = (body = "") => {
+  const trimmed = body.trim();
+  if (trimmed.length < COMMENT_LIMITS.min) {
+    return "Comment must be at least 3 characters.";
+  }
+  if (trimmed.length > COMMENT_LIMITS.max) {
+    return "Comment must be under 600 characters.";
+  }
+  return null;
+};
+
+export const listComments = async (req, res) => {
+  const pool = await req.app.locals.getPool();
+  const { userId } = req.user;
+  const { memoryId } = req.params;
+  const page = Math.max(Number(req.query.page) || 1, 1);
+  const limit = Math.min(Math.max(Number(req.query.limit) || 20, 5), 50);
+  const offset = (page - 1) * limit;
+
+  try {
+    await assertMemoryVisibility(pool, memoryId, userId);
+
+    const result = await pool.query(
+      `SELECT c.id, c.body, c.created_at, c.updated_at,
+              s.student_id, s.first_name, s.last_name, s.photo_url
+       FROM memory_comments c
+       JOIN students s ON s.student_id = c.student_id
+       WHERE c.memory_id = $1
+       ORDER BY c.created_at DESC
+       LIMIT $2 OFFSET $3`,
+      [memoryId, limit, offset],
+    );
+
+    const countResult = await pool.query(
+      `SELECT COUNT(*)::int AS total FROM memory_comments WHERE memory_id = $1`,
+      [memoryId],
+    );
+
+    res.status(200).json({
+      memoryId: Number(memoryId),
+      page,
+      limit,
+      total: countResult.rows[0]?.total || 0,
+      comments: result.rows.map((row) => ({
+        id: row.id,
+        body: row.body,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+        student: {
+          studentId: row.student_id,
+          firstName: row.first_name,
+          lastName: row.last_name,
+          photoUrl: row.photo_url,
+        },
+      })),
+    });
+  } catch (error) {
+    if (error.message === "PROFILE_REQUIRED") {
+      return res.status(400).json({ error: "Link your student profile first." });
+    }
+    if (error.message === "NOT_FOUND") {
+      return res.status(404).json({ error: "Memory not found." });
+    }
+    if (error.message === "FORBIDDEN") {
+      return res.status(403).json({ error: "You cannot view these comments." });
+    }
+    console.error("List comments error", error);
+    return res.status(500).json({ error: "Failed to load comments." });
+  }
+};
+
+export const addComment = async (req, res) => {
+  const pool = await req.app.locals.getPool();
+  const { userId } = req.user;
+  const { memoryId } = req.params;
+  const body = (req.body.body || "").trim();
+
+  const validationError = validateCommentBody(body);
+  if (validationError) {
+    return res.status(400).json({ error: validationError });
+  }
+
+  try {
+    const { viewer } = await assertMemoryVisibility(pool, memoryId, userId);
+
+    const insertResult = await pool.query(
+      `INSERT INTO memory_comments (memory_id, student_id, body)
+       VALUES ($1, $2, $3)
+       RETURNING id, body, created_at`,
+      [memoryId, viewer.student_id, body],
+    );
+
+    return res.status(201).json({
+      memoryId: Number(memoryId),
+      comment: {
+        id: insertResult.rows[0].id,
+        body: insertResult.rows[0].body,
+        createdAt: insertResult.rows[0].created_at,
+        student: {
+          studentId: viewer.student_id,
+        },
+      },
+    });
+  } catch (error) {
+    if (error.message === "PROFILE_REQUIRED") {
+      return res.status(400).json({ error: "Link your student profile first." });
+    }
+    if (error.message === "NOT_FOUND") {
+      return res.status(404).json({ error: "Memory not found." });
+    }
+    if (error.message === "FORBIDDEN") {
+      return res.status(403).json({ error: "You cannot comment on this memory." });
+    }
+    console.error("Add comment error", error);
+    return res.status(500).json({ error: "Failed to add comment." });
+  }
+};
+
+export const updateComment = async (req, res) => {
+  const pool = await req.app.locals.getPool();
+  const { userId } = req.user;
+  const { memoryId, commentId } = req.params;
+  const body = (req.body.body || "").trim();
+
+  const validationError = validateCommentBody(body);
+  if (validationError) {
+    return res.status(400).json({ error: validationError });
+  }
+
+  try {
+    const { viewer } = await assertMemoryVisibility(pool, memoryId, userId);
+
+    const updateResult = await pool.query(
+      `UPDATE memory_comments
+       SET body = $1, updated_at = NOW()
+       WHERE id = $2 AND memory_id = $3 AND student_id = $4
+       RETURNING id, body, updated_at`,
+      [body, commentId, memoryId, viewer.student_id],
+    );
+
+    if (updateResult.rows.length === 0) {
+      return res.status(404).json({ error: "Comment not found." });
+    }
+
+    return res.status(200).json({
+      memoryId: Number(memoryId),
+      comment: {
+        id: updateResult.rows[0].id,
+        body: updateResult.rows[0].body,
+        updatedAt: updateResult.rows[0].updated_at,
+      },
+    });
+  } catch (error) {
+    if (error.message === "PROFILE_REQUIRED") {
+      return res.status(400).json({ error: "Link your student profile first." });
+    }
+    if (error.message === "NOT_FOUND") {
+      return res.status(404).json({ error: "Memory not found." });
+    }
+    if (error.message === "FORBIDDEN") {
+      return res.status(403).json({ error: "You cannot edit comments on this memory." });
+    }
+    console.error("Update comment error", error);
+    return res.status(500).json({ error: "Failed to update comment." });
+  }
+};
+
+export const deleteComment = async (req, res) => {
+  const pool = await req.app.locals.getPool();
+  const { userId } = req.user;
+  const { memoryId, commentId } = req.params;
+
+  try {
+    const { viewer } = await assertMemoryVisibility(pool, memoryId, userId);
+
+    const deleteResult = await pool.query(
+      `DELETE FROM memory_comments
+       WHERE id = $1 AND memory_id = $2 AND student_id = $3
+       RETURNING id`,
+      [commentId, memoryId, viewer.student_id],
+    );
+
+    if (deleteResult.rows.length === 0) {
+      return res.status(404).json({ error: "Comment not found." });
+    }
+
+    return res.status(200).json({ memoryId: Number(memoryId), deleted: true });
+  } catch (error) {
+    if (error.message === "PROFILE_REQUIRED") {
+      return res.status(400).json({ error: "Link your student profile first." });
+    }
+    if (error.message === "NOT_FOUND") {
+      return res.status(404).json({ error: "Memory not found." });
+    }
+    if (error.message === "FORBIDDEN") {
+      return res.status(403).json({ error: "You cannot delete comments on this memory." });
+    }
+    console.error("Delete comment error", error);
+    return res.status(500).json({ error: "Failed to delete comment." });
+  }
+};
