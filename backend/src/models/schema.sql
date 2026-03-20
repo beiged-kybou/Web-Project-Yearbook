@@ -103,6 +103,32 @@ CREATE TABLE memory_comments (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE tag_notifications (
+    id SERIAL PRIMARY KEY,
+    memory_id INTEGER NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+    tagged_student_id VARCHAR(32) NOT NULL REFERENCES students(student_id) ON DELETE CASCADE,
+    requested_by_student_id VARCHAR(32) NOT NULL REFERENCES students(student_id) ON DELETE CASCADE,
+    acted_by_student_id VARCHAR(32) REFERENCES students(student_id) ON DELETE SET NULL,
+    status VARCHAR(16) NOT NULL DEFAULT 'pending',
+    note TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    acted_at TIMESTAMPTZ,
+    UNIQUE (memory_id, tagged_student_id)
+);
+
+CREATE TABLE activity_notifications (
+    id SERIAL PRIMARY KEY,
+    student_id VARCHAR(32) NOT NULL REFERENCES students(student_id) ON DELETE CASCADE,
+    actor_student_id VARCHAR(32) REFERENCES students(student_id) ON DELETE SET NULL,
+    memory_id INTEGER REFERENCES memories(id) ON DELETE CASCADE,
+    notification_type VARCHAR(24) NOT NULL CHECK (notification_type IN ('reaction', 'comment', 'memory')),
+    payload JSONB DEFAULT '{}'::jsonb,
+    is_read BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_activity_notifications_student ON activity_notifications(student_id, created_at DESC);
+
 CREATE TABLE images (
     id SERIAL PRIMARY KEY,
     entity_type VARCHAR(20) NOT NULL CHECK (entity_type IN ('student', 'memory')),
@@ -122,6 +148,7 @@ CREATE INDEX idx_users_google_sub ON users(google_sub);
 CREATE INDEX idx_memories_created_at ON memories(created_at DESC);
 CREATE INDEX idx_memory_reactions_memory ON memory_reactions(memory_id);
 CREATE INDEX idx_memory_comments_memory ON memory_comments(memory_id);
+CREATE INDEX idx_activity_notifications_read_state ON activity_notifications(student_id, is_read, created_at DESC);
 
 GRANT ALL ON SCHEMA public TO yearbook_db_user;
 GRANT ALL ON ALL TABLES IN SCHEMA public TO yearbook_db_user;

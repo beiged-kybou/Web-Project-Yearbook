@@ -10,6 +10,7 @@ import memoryRoutes from "./routes/memoryRoutes.js";
 import studentRoutes from "./routes/studentRoutes.js";
 import clubRoutes from "./routes/clubRoutes.js";
 import tagNotificationRoutes from "./routes/tagNotificationRoutes.js";
+import activityNotificationRoutes from "./routes/activityNotificationRoutes.js";
 import batchRoutes from "./routes/batchRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
 
@@ -29,6 +30,7 @@ app.use("/api/students", studentRoutes);
 app.use("/api/memories", memoryRoutes);
 app.use("/api/clubs", clubRoutes);
 app.use("/api/tag-notifications", tagNotificationRoutes);
+app.use("/api/activity-notifications", activityNotificationRoutes);
 app.use("/api/batches", batchRoutes);
 app.use("/api/admin", adminRoutes);
 

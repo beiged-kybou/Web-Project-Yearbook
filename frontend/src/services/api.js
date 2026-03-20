@@ -288,7 +288,38 @@ export const tagNotificationService = {
   },
 };
 
-export const notificationService = tagNotificationService;
+export const activityNotificationService = {
+  list: async ({ page = 1, limit = 20 } = {}) => {
+    const token = localStorage.getItem('accessToken');
+    const response = await api.get('/activity-notifications/me', {
+      params: { page, limit },
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  markRead: async (notificationId) => {
+    const token = localStorage.getItem('accessToken');
+    const response = await api.post(
+      `/activity-notifications/${notificationId}/read`,
+      null,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    );
+    return response.data;
+  },
+  markAllRead: async () => {
+    const token = localStorage.getItem('accessToken');
+    const response = await api.post(
+      `/activity-notifications/me/mark-all`,
+      null,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    );
+    return response.data;
+  },
+};
 
 export const studentService = {
   list: async ({ search = '', department = '', batch, page = 1, limit = 24 } = {}) => {

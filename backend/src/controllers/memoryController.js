@@ -1,4 +1,5 @@
 import cloudinary from "../config/cloudinary.js";
+import notificationService, { NOTIFICATION_TYPES } from "../services/notificationService.js";
 
 const PRIVACY_CONFIG = {
   department: {
@@ -1026,6 +1027,7 @@ const assertMemoryVisibility = async (pool, memoryId, userId) => {
   const result = await pool.query(
     `SELECT m.id,
             m.created_by,
+            m.title,
             a.type AS album_type,
             CASE WHEN a.type = 'club' THEN a.id END AS album_club_id,
             s.department,
@@ -1072,7 +1074,7 @@ export const upsertReaction = async (req, res) => {
   }
 
   try {
-    const { viewer } = await assertMemoryVisibility(pool, memoryId, userId);
+    const { viewer, memory } = await assertMemoryVisibility(pool, memoryId, userId);
 
     await pool.query(
       `INSERT INTO memory_reactions (memory_id, student_id, reaction_type)
@@ -1089,6 +1091,23 @@ export const upsertReaction = async (req, res) => {
        GROUP BY reaction_type`,
       [memoryId],
     );
+
+    await notificationService.notifyMemoryCreator(pool, {
+      memory,
+      actor: viewer,
+      type: NOTIFICATION_TYPES.REACTION,
+      extraPayload: {
+        reactionType,
+      },
+    });
+    await notificationService.notifyParticipants(pool, {
+      memoryId: memory.id,
+      actor: viewer,
+      type: NOTIFICATION_TYPES.REACTION,
+      extraPayload: {
+        reactionType,
+      },
+    });
 
     return res.status(200).json({
       memoryId: Number(memoryId),
@@ -1223,7 +1242,7 @@ export const addComment = async (req, res) => {
   }
 
   try {
-    const { viewer } = await assertMemoryVisibility(pool, memoryId, userId);
+    const { viewer, memory } = await assertMemoryVisibility(pool, memoryId, userId);
 
     const insertResult = await pool.query(
       `INSERT INTO memory_comments (memory_id, student_id, body)
@@ -1231,6 +1250,23 @@ export const addComment = async (req, res) => {
        RETURNING id, body, created_at`,
       [memoryId, viewer.student_id, body],
     );
+
+    await notificationService.notifyMemoryCreator(pool, {
+      memory,
+      actor: viewer,
+      type: NOTIFICATION_TYPES.COMMENT,
+      extraPayload: {
+        commentId: insertResult.rows[0].id,
+      },
+    });
+    await notificationService.notifyParticipants(pool, {
+      memoryId: memory.id,
+      actor: viewer,
+      type: NOTIFICATION_TYPES.COMMENT,
+      extraPayload: {
+        commentId: insertResult.rows[0].id,
+      },
+    });
 
     return res.status(201).json({
       memoryId: Number(memoryId),

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Link } from 'react-router-dom';
-import { clubService, dashboardService, memoryService, studentService, tagNotificationService } from '../services/api';
+import { activityNotificationService, clubService, dashboardService, memoryService, studentService, tagNotificationService } from '../services/api';
+import ActivityNotificationCard from '../components/ActivityNotificationCard';
 import ImageTray from '../components/ImageTray';
 import './Dashboard.css';
 
@@ -510,8 +511,20 @@ const Dashboard = () => {
         setNotificationError('');
         try {
             setNotificationLoading(true);
-            const result = await tagNotificationService.list();
-            setNotifications(result.notifications || []);
+            const [tagResult, activityResult] = await Promise.all([
+                tagNotificationService.list().catch(() => ({ notifications: [] })),
+                activityNotificationService.list().catch(() => ({ notifications: [] })),
+            ]);
+            setNotifications([
+                ...(tagResult.notifications || []).map((notification) => ({
+                    ...notification,
+                    notificationKind: 'tag',
+                })),
+                ...(activityResult.notifications || []).map((notification) => ({
+                    ...notification,
+                    notificationKind: 'activity',
+                })),
+            ]);
         } catch (err) {
             setNotificationError(err.response?.data?.error || 'Failed to load notifications.');
         } finally {
@@ -1319,7 +1332,7 @@ const NotificationsPanel = ({ open, onClose, notifications, loading, error, onRe
                 onClick={(event) => event.stopPropagation()}
             >
                 <div className="modal-header">
-                    <h3 className="composer-title">Tag Notifications</h3>
+                    <h3 className="composer-title">Notifications</h3>
                     <button type="button" className="modal-close" onClick={onClose}>
                         Close
                     </button>
@@ -1336,38 +1349,49 @@ const NotificationsPanel = ({ open, onClose, notifications, loading, error, onRe
                 {loading ? (
                     <p className="loading-text">Loading notifications...</p>
                 ) : notifications.length === 0 ? (
-                    <p className="empty-text">No tag requests yet.</p>
+                    <p className="empty-text">No notifications yet.</p>
                 ) : (
                     <div className="notifications-list">
-                        {notifications.map((notification) => (
-                            <article key={notification.id} className="notification-item">
-                                <header>
-                                    <h4>{notification.memory_title}</h4>
-                                    <span className="notification-meta">
-                                        Requested by {notification.requested_by_name || 'Someone'}
-                                    </span>
-                                </header>
-                                <p className="notification-caption">{notification.memory_content}</p>
-                                <footer>
-                                    <button
-                                        type="button"
-                                        className="approve"
-                                        onClick={() => onDecision(notification.id, 'approved')}
-                                        disabled={loading}
-                                    >
-                                        Approve
-                                    </button>
-                                    <button
-                                        type="button"
-                                        className="decline"
-                                        onClick={() => onDecision(notification.id, 'declined')}
-                                        disabled={loading}
-                                    >
-                                        Decline
-                                    </button>
-                                </footer>
-                            </article>
-                        ))}
+                        {notifications.map((notification) => {
+                            if (notification.notificationKind === 'tag') {
+                                return (
+                                    <article key={`tag-${notification.id}`} className="notification-item">
+                                        <header>
+                                            <h4>{notification.memory_title}</h4>
+                                            <span className="notification-meta">
+                                    Requested by {notification.requested_by_name || 'Someone'}
+                                </span>
+                                        </header>
+                                        <p className="notification-caption">{notification.memory_content}</p>
+                                        <footer>
+                                            <button
+                                                type="button"
+                                                className="approve"
+                                                onClick={() => onDecision(notification.id, 'approved')}
+                                                disabled={loading}
+                                            >
+                                                Approve
+                                            </button>
+                                            <button
+                                                type="button"
+                                                className="decline"
+                                                onClick={() => onDecision(notification.id, 'declined')}
+                                                disabled={loading}
+                                            >
+                                                Decline
+                                            </button>
+                                        </footer>
+                                    </article>
+                                );
+                            }
+
+                            return (
+                                <ActivityNotificationCard
+                                    key={`activity-${notification.id}`}
+                                    notification={notification}
+                                />
+                            );
+                        })}
                     </div>
                 )}
             </section>
