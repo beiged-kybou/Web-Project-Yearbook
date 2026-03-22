@@ -45,34 +45,48 @@ export const dashboardService = {
   },
 };
 
+const authorized = () => ({
+  headers: { Authorization: `Bearer ${localStorage.getItem('accessToken')}` },
+});
+
 export const adminService = {
   getDashboard: async () => {
-    const token = localStorage.getItem('accessToken');
-    const response = await api.get('/admin/dashboard', {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const response = await api.get('/admin/dashboard', authorized());
     return response.data;
   },
   decideMemory: async (memoryId, decision, note) => {
-    const token = localStorage.getItem('accessToken');
     const response = await api.post(
       `/admin/memories/${memoryId}/decision`,
       { decision, note },
-      {
-        headers: { Authorization: `Bearer ${token}` },
-      },
+      authorized(),
     );
     return response.data;
   },
   decideTag: async (tagId, decision, note) => {
-    const token = localStorage.getItem('accessToken');
     const response = await api.post(
       `/admin/tags/${tagId}/decision`,
       { decision, note },
-      {
-        headers: { Authorization: `Bearer ${token}` },
-      },
+      authorized(),
     );
+    return response.data;
+  },
+};
+
+export const roleService = {
+  listAccess: async () => {
+    const response = await api.get('/roles/access', authorized());
+    return response.data;
+  },
+  updateRole: async (userId, role) => {
+    const response = await api.post(
+      `/roles/access/${userId}/role`,
+      { role },
+      authorized(),
+    );
+    return response.data;
+  },
+  revokeAccess: async (userId) => {
+    const response = await api.delete(`/roles/access/${userId}`, authorized());
     return response.data;
   },
 };

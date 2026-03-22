@@ -13,6 +13,7 @@ import tagNotificationRoutes from "./routes/tagNotificationRoutes.js";
 import activityNotificationRoutes from "./routes/activityNotificationRoutes.js";
 import batchRoutes from "./routes/batchRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
+import roleRoutes from "./routes/roleRoutes.js";
 
 dotenv.config();
 const app = express();
@@ -33,6 +34,7 @@ app.use("/api/tag-notifications", tagNotificationRoutes);
 app.use("/api/activity-notifications", activityNotificationRoutes);
 app.use("/api/batches", batchRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/roles", roleRoutes);
 
 app.use("/uploads", express.static("uploads"));
 

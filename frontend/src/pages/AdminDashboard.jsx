@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { adminService } from '../services/api';
+import { adminService, roleService } from '../services/api';
+import useIsRootAdmin, { isRootAdminEmail } from '../hooks/useIsRootAdmin';
 import './AdminDashboard.css';
 
 const AdminDashboard = () => {
@@ -9,6 +10,13 @@ const AdminDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [actionMessage, setActionMessage] = useState('');
+  const [accessList, setAccessList] = useState([]);
+  const [accessLoading, setAccessLoading] = useState(false);
+  const [accessError, setAccessError] = useState('');
+  const [roleUpdating, setRoleUpdating] = useState('');
+  const [showAccessModal, setShowAccessModal] = useState(false);
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const rootAdmin = useIsRootAdmin();
 
   useEffect(() => {
     const user = JSON.parse(localStorage.getItem('user') || '{}');
@@ -17,6 +25,7 @@ const AdminDashboard = () => {
       return;
     }
     loadDashboard();
+    loadAccessList();
   }, []);
 
   const loadDashboard = async () => {
@@ -28,6 +37,46 @@ const AdminDashboard = () => {
       setError(err.response?.data?.error || 'Failed to load admin dashboard');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleRoleChange = async (memberId, nextRole) => {
+    try {
+      setRoleUpdating(memberId);
+      await roleService.updateRole(memberId, nextRole);
+      setActionMessage('Role updated');
+      await loadAccessList();
+    } catch (err) {
+      setAccessError(err.response?.data?.error || 'Failed to update role');
+    } finally {
+      setRoleUpdating('');
+    }
+  };
+
+  const handleRevoke = async (memberId) => {
+    if (!window.confirm('Revoke access for this user?')) return;
+    try {
+      setRoleUpdating(memberId);
+      await roleService.revokeAccess(memberId);
+      setActionMessage('Access revoked');
+      await loadAccessList();
+    } catch (err) {
+      setAccessError(err.response?.data?.error || 'Failed to revoke access');
+    } finally {
+      setRoleUpdating('');
+    }
+  };
+
+  const loadAccessList = async () => {
+    try {
+      setAccessError('');
+      setAccessLoading(true);
+      const response = await roleService.listAccess();
+      setAccessList(response.users || []);
+    } catch (err) {
+      setAccessError(err.response?.data?.error || 'Failed to load access list');
+    } finally {
+      setAccessLoading(false);
     }
   };
 
@@ -91,6 +140,11 @@ const AdminDashboard = () => {
           </div>
           <div className="admin-actions">
             <button type="button" onClick={loadDashboard}>Refresh</button>
+            {rootAdmin && (
+              <button type="button" onClick={() => setShowAccessModal(true)}>
+                Manage Access
+              </button>
+            )}
             <button type="button" className="primary" onClick={() => navigate('/dashboard')}>
               Back to Dashboard
             </button>
@@ -188,6 +242,66 @@ const AdminDashboard = () => {
             </table>
           )}
         </section>
+
+        {showAccessModal && (
+          <div className="modal-backdrop" onClick={() => setShowAccessModal(false)}>
+            <div className="modal-panel" onClick={(event) => event.stopPropagation()}>
+              <header className="modal-header">
+                <h2>Roles & Access</h2>
+                <button type="button" className="ghost" onClick={() => setShowAccessModal(false)}>
+                  Close
+                </button>
+              </header>
+
+              {accessLoading ? (
+                <div className="modal-body">
+                  <div className="spinner" />
+                  <p className="loading-text">Loading access list…</p>
+                </div>
+              ) : accessError ? (
+                <div className="modal-body">
+                  <div className="error-message">{accessError}</div>
+                </div>
+              ) : (
+                <div className="modal-body access-list">
+                  {accessList.map((member) => {
+                    const email = member.email || '';
+                    const isProtected = isRootAdminEmail(email);
+                    return (
+                      <div key={member.id} className="access-row">
+                        <div>
+                          <p className="access-name">{member.display_name || '—'}</p>
+                          <p className="access-email">{email}</p>
+                          {isProtected && <p className="access-badge">Root Admin</p>}
+                        </div>
+                        <div className="access-actions">
+                          <select
+                            value={member.role}
+                            disabled={!rootAdmin && isProtected}
+                            onChange={(event) => handleRoleChange(member.id, event.target.value)}
+                          >
+                            <option value="student">Student</option>
+                            <option value="teacher">Teacher</option>
+                            <option value="staff">Staff</option>
+                            <option value="admin">Admin</option>
+                          </select>
+                          <button
+                            type="button"
+                            className="danger"
+                            disabled={isProtected || roleUpdating === member.id}
+                            onClick={() => handleRevoke(member.id)}
+                          >
+                            Revoke
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

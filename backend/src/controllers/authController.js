@@ -3,6 +3,7 @@ import jwt from "jsonwebtoken";
 import otpService from "../services/otpService.js";
 import { sendOtpMail } from "../utils/mailer.js";
 import { parseStudentName } from "../utils/parseStudentName.js";
+import { isRootAdmin } from "../config/rootAdmins.js";
 
 export const requestOtp = async (req, res) => {
   const email = req.body.email?.trim().toLowerCase();
@@ -13,11 +14,17 @@ export const requestOtp = async (req, res) => {
 
   try {
     const userCheck = await pool.query(
-      "SELECT id FROM users WHERE email = $1",
+      "SELECT id, role FROM users WHERE email = $1",
       [email],
     );
     if (userCheck.rows.length > 0) {
-      return res.status(409).json({ error: "Email already registered" });
+      const existingRole = userCheck.rows[0].role;
+      return res.status(409).json({
+        error:
+          existingRole === "admin"
+            ? "This account already has administrative access."
+            : "Email already registered",
+      });
     }
 
     const otp = otpService.generateOtp();
@@ -197,8 +204,8 @@ export const completeRegistration = async (req, res) => {
     );
 
     const insertQuery = `
-      INSERT INTO users (email, password_hash, display_name, student_id)
-      VALUES ($1, $2, $3, $4)
+      INSERT INTO users (email, password_hash, display_name, student_id, role)
+      VALUES ($1, $2, $3, $4, $5)
       RETURNING id, email, display_name, role, created_at, student_id
     `;
 
@@ -207,6 +214,7 @@ export const completeRegistration = async (req, res) => {
       passwordHash,
       fullName,
       studentId,
+      isRootAdmin(email) ? "admin" : "student",
     ]);
 
     const newUser = result.rows[0];
