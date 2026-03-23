@@ -103,6 +103,53 @@ CREATE TABLE memory_comments (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE events (
+    id SERIAL PRIMARY KEY,
+    title VARCHAR(200) NOT NULL,
+    description TEXT,
+    cover_photo_url TEXT,
+    scope VARCHAR(24) NOT NULL DEFAULT 'global' CHECK (scope IN ('global', 'department', 'club')),
+    scope_ref VARCHAR(64),
+    start_time TIMESTAMPTZ,
+    end_time TIMESTAMPTZ,
+    location TEXT,
+    created_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE event_posts (
+    id SERIAL PRIMARY KEY,
+    event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+    title VARCHAR(200) NOT NULL,
+    body TEXT,
+    created_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE event_subscriptions (
+    id SERIAL PRIMARY KEY,
+    event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE (event_id, user_id)
+);
+
+CREATE TABLE bookmarks (
+    id SERIAL PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    entity_type VARCHAR(24) NOT NULL CHECK (entity_type IN ('memory', 'event', 'event_post')),
+    entity_id TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE (user_id, entity_type, entity_id)
+);
+
+CREATE TABLE follows (
+    follower_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    following_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (follower_id, following_id)
+);
+
 CREATE TABLE tag_notifications (
     id SERIAL PRIMARY KEY,
     memory_id INTEGER NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
@@ -131,7 +178,7 @@ CREATE INDEX idx_activity_notifications_student ON activity_notifications(studen
 
 CREATE TABLE images (
     id SERIAL PRIMARY KEY,
-    entity_type VARCHAR(20) NOT NULL CHECK (entity_type IN ('student', 'memory')),
+    entity_type VARCHAR(20) NOT NULL CHECK (entity_type IN ('student', 'memory', 'event_post')),
     entity_id VARCHAR(20) NOT NULL,
     photo_url TEXT NOT NULL,
     sort_order INTEGER DEFAULT 0,
@@ -149,6 +196,11 @@ CREATE INDEX idx_memories_created_at ON memories(created_at DESC);
 CREATE INDEX idx_memory_reactions_memory ON memory_reactions(memory_id);
 CREATE INDEX idx_memory_comments_memory ON memory_comments(memory_id);
 CREATE INDEX idx_activity_notifications_read_state ON activity_notifications(student_id, is_read, created_at DESC);
+CREATE INDEX idx_events_scope ON events(scope, scope_ref);
+CREATE INDEX idx_event_posts_event ON event_posts(event_id, created_at DESC);
+CREATE INDEX idx_event_subscriptions_user ON event_subscriptions(user_id, event_id);
+CREATE INDEX idx_bookmarks_user ON bookmarks(user_id, entity_type);
+CREATE INDEX idx_follows_following ON follows(following_id);
 
 GRANT ALL ON SCHEMA public TO yearbook_db_user;
 GRANT ALL ON ALL TABLES IN SCHEMA public TO yearbook_db_user;

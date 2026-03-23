@@ -1,4 +1,5 @@
 import jwt from "jsonwebtoken";
+import { isRootAdmin } from "../config/rootAdmins.js";
 
 export const authenticate = (req, res, next) => {
   const authHeader = req.headers.authorization;
@@ -21,6 +22,13 @@ export const authenticate = (req, res, next) => {
 export const authorizeAdmin = (req, res, next) => {
   if (!req.user || req.user.role !== "admin") {
     return res.status(403).json({ error: "Admin privileges required." });
+  }
+  return next();
+};
+
+export const authorizeRootAdmin = (req, res, next) => {
+  if (!req.user?.email || !isRootAdmin(req.user.email)) {
+    return res.status(403).json({ error: "Root admin privileges required." });
   }
   return next();
 };

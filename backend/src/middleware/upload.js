@@ -19,3 +19,12 @@ export const memoryUpload = multer({
     fileSize: 5 * 1024 * 1024,
   },
 });
+
+export const eventUpload = multer({
+  storage,
+  fileFilter,
+  limits: {
+    files: 5,
+    fileSize: 5 * 1024 * 1024,
+  },
+});

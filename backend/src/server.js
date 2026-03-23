@@ -14,6 +14,7 @@ import activityNotificationRoutes from "./routes/activityNotificationRoutes.js";
 import batchRoutes from "./routes/batchRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
 import roleRoutes from "./routes/roleRoutes.js";
+import eventRoutes from "./routes/eventRoutes.js";
 
 dotenv.config();
 const app = express();
@@ -35,6 +36,7 @@ app.use("/api/activity-notifications", activityNotificationRoutes);
 app.use("/api/batches", batchRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/roles", roleRoutes);
+app.use("/api/events", eventRoutes);
 
 app.use("/uploads", express.static("uploads"));
 
