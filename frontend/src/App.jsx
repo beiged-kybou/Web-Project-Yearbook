@@ -6,6 +6,7 @@ import BatchTimeline from './pages/BatchTimeline'
 import StudentDirectory from './pages/StudentDirectory'
 import AdminDashboard from './pages/AdminDashboard'
 import Discover from './pages/Discover'
+import YearbookStudio from './pages/YearbookStudio'
 
 function App() {
   return (
@@ -18,6 +19,7 @@ function App() {
       <Route path="/batches" element={<BatchTimeline />} />
       <Route path="/directory" element={<StudentDirectory />} />
       <Route path="/admin" element={<AdminDashboard />} />
+      <Route path="/yearbook/studio" element={<YearbookStudio />} />
     </Routes>
   )
 }

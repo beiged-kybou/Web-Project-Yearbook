@@ -137,14 +137,16 @@ export const clubService = {
 };
 
 export const memoryService = {
-  getFeed: async ({ page = 1, limit = 10 } = {}) => {
+  getFeed: async ({ page = 1, limit = 10, search } = {}) => {
     const token = localStorage.getItem('accessToken');
     const response = await api.get('/memories/feed', {
-      params: { page, limit },
+      params: { page, limit, search: search || undefined },
       headers: { Authorization: `Bearer ${token}` },
     });
     return response.data;
   },
+  searchPublicMemories: async (query, options = {}) =>
+    memoryService.getFeed({ page: 1, limit: options.limit || 10, search: query }),
   react: async (memoryId, reactionType) => {
     const token = localStorage.getItem('accessToken');
     const response = await api.post(
@@ -277,6 +279,106 @@ export const memoryService = {
         'Content-Type': 'multipart/form-data',
       },
     });
+    return response.data;
+  },
+};
+
+export const yearbookService = {
+  listAssignedPages: async () => {
+    const response = await api.get('/yearbooks/me/pages', authorized());
+    return response.data;
+  },
+  getPage: async (pageId) => {
+    const response = await api.get(`/yearbooks/pages/${pageId}`, authorized());
+    return response.data;
+  },
+  updatePage: async (pageId, payload) => {
+    const response = await api.put(`/yearbooks/pages/${pageId}`, payload, authorized());
+    return response.data;
+  },
+  submitPage: async (pageId) => {
+    const response = await api.post(`/yearbooks/pages/${pageId}/submit`, null, authorized());
+    return response.data;
+  },
+  uploadPageImage: async (pageId, formData) => {
+    const token = localStorage.getItem('accessToken');
+    const response = await api.post(`/yearbooks/pages/${pageId}/images`, formData, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  },
+  removeImage: async (pageId, imageId) => {
+    const response = await api.delete(`/yearbooks/pages/${pageId}/images/${imageId}`, authorized());
+    return response.data;
+  },
+  attachPost: async (pageId, entityType, entityId) => {
+    const response = await api.post(
+      `/yearbooks/pages/${pageId}/posts`,
+      { entityType, entityId },
+      authorized(),
+    );
+    return response.data;
+  },
+  removeAttachment: async (pageId, attachmentId) => {
+    const response = await api.delete(
+      `/yearbooks/pages/${pageId}/posts/${attachmentId}`,
+      authorized(),
+    );
+    return response.data;
+  },
+  approvePage: async (pageId) => {
+    const response = await api.post(`/yearbooks/pages/${pageId}/approve`, null, authorized());
+    return response.data;
+  },
+  listReleases: async ({ status } = {}) => {
+    const response = await api.get('/yearbooks', {
+      ...authorized(),
+      params: status ? { status } : undefined,
+    });
+    return response.data;
+  },
+  createRelease: async ({ title, year, theme, introText, coverPhotoUrl, coverFile }) => {
+    const token = localStorage.getItem('accessToken');
+    const formData = new FormData();
+    if (title !== undefined) formData.append('title', title);
+    if (year !== undefined) formData.append('year', year);
+    if (theme !== undefined) formData.append('theme', theme);
+    if (introText !== undefined) formData.append('introText', introText);
+    if (coverPhotoUrl) formData.append('coverPhotoUrl', coverPhotoUrl);
+    if (coverFile) formData.append('cover', coverFile);
+    const response = await api.post('/yearbooks', formData, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  },
+  updateReleaseStatus: async (releaseId, status) => {
+    const response = await api.patch(
+      `/yearbooks/${releaseId}/status`,
+      { status },
+      authorized(),
+    );
+    return response.data;
+  },
+  listReleasePages: async (releaseId) => {
+    const response = await api.get(`/yearbooks/${releaseId}/pages`, authorized());
+    return response.data;
+  },
+  assignPageOwner: async (pageId, payload) => {
+    const response = await api.put(`/yearbooks/pages/${pageId}/assign`, payload, authorized());
+    return response.data;
+  },
+  listPublicReleases: async () => {
+    const response = await api.get('/yearbooks/public');
+    return response.data;
+  },
+  getPublishedRelease: async (releaseId) => {
+    const response = await api.get(`/yearbooks/public/${releaseId}`);
     return response.data;
   },
 };

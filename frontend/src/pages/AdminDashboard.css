@@ -67,6 +67,158 @@
   margin-top: 1.5rem;
 }
 
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.section-actions {
+  display: flex;
+  gap: 0.6rem;
+}
+
+.yearbook-releases {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.release-form {
+  border: 1px solid var(--cp-surface1);
+  border-radius: var(--radius-md);
+  padding: 1.25rem;
+  background: rgba(28, 28, 43, 0.85);
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.release-form h3 {
+  margin: 0;
+}
+
+.release-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.9rem;
+}
+
+.release-form input,
+.release-form textarea,
+.release-form select {
+  border-radius: 10px;
+  border: 1px solid var(--cp-surface1);
+  padding: 0.55rem 0.75rem;
+  background: rgba(24, 24, 37, 0.7);
+  color: var(--cp-text);
+}
+
+.release-form button + button {
+  margin-top: -0.5rem;
+}
+
+.release-table-wrapper {
+  overflow-x: auto;
+}
+
+.release-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 520px;
+}
+
+.release-table th,
+.release-table td {
+  padding: 0.75rem;
+  border-bottom: 1px solid var(--cp-surface1);
+  text-align: left;
+}
+
+.release-title {
+  margin: 0;
+  font-weight: 600;
+}
+
+.release-subtext {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--cp-overlay1);
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  text-transform: capitalize;
+}
+
+.status-draft {
+  background: rgba(135, 196, 255, 0.16);
+  color: #89dceb;
+}
+
+.status-collecting {
+  background: rgba(166, 227, 161, 0.18);
+  color: #a6e3a1;
+}
+
+.status-final {
+  background: rgba(250, 179, 135, 0.18);
+  color: #fab387;
+}
+
+.status-published {
+  background: rgba(203, 166, 247, 0.2);
+  color: #cba6f7;
+}
+
+.release-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.release-actions select {
+  min-width: 140px;
+}
+
+.confirm-banner {
+  border: 1px solid var(--cp-yellow, #f9e2af);
+  background: rgba(249, 226, 175, 0.1);
+  border-radius: var(--radius-md);
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+.confirm-actions {
+  display: flex;
+  gap: 0.6rem;
+}
+
+.admin-empty-state {
+  border: 1px dashed var(--cp-surface1);
+  border-radius: var(--radius-md);
+  padding: 2rem;
+  text-align: center;
+}
+
+.admin-empty-state button {
+  margin-top: 1rem;
+}
+
+
+
 .list-stack {
   display: flex;
   flex-direction: column;

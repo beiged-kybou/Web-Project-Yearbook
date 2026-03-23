@@ -1,5 +1,8 @@
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
+DROP TABLE IF EXISTS yearbook_page_posts;
+DROP TABLE IF EXISTS yearbook_pages;
+DROP TABLE IF EXISTS yearbook_releases;
 DROP TABLE IF EXISTS memory_participants;
 DROP TABLE IF EXISTS memories;
 DROP TABLE IF EXISTS images;
@@ -150,6 +153,49 @@ CREATE TABLE follows (
     PRIMARY KEY (follower_id, following_id)
 );
 
+CREATE TABLE yearbook_releases (
+    id SERIAL PRIMARY KEY,
+    title VARCHAR(255) NOT NULL,
+    year INTEGER NOT NULL,
+    theme TEXT,
+    cover_photo_url TEXT,
+    intro_text TEXT,
+    status VARCHAR(16) NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'collecting', 'final', 'published')),
+    created_by UUID REFERENCES users(id),
+    published_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE yearbook_pages (
+    id SERIAL PRIMARY KEY,
+    release_id INTEGER NOT NULL REFERENCES yearbook_releases(id) ON DELETE CASCADE,
+    page_number INTEGER NOT NULL,
+    owner_type VARCHAR(16) NOT NULL CHECK (owner_type IN ('department', 'club', 'individual', 'admin')),
+    owner_ref VARCHAR(64),
+    assigned_user_id UUID REFERENCES users(id),
+    title VARCHAR(255),
+    layout JSONB DEFAULT '{}'::jsonb,
+    content JSONB DEFAULT '{}'::jsonb,
+    status VARCHAR(16) NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'submitted', 'approved')),
+    submitted_at TIMESTAMPTZ,
+    submitted_by UUID REFERENCES users(id),
+    approved_at TIMESTAMPTZ,
+    approved_by UUID REFERENCES users(id),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(release_id, page_number)
+);
+
+CREATE TABLE yearbook_page_posts (
+    id SERIAL PRIMARY KEY,
+    page_id INTEGER NOT NULL REFERENCES yearbook_pages(id) ON DELETE CASCADE,
+    entity_type VARCHAR(16) NOT NULL CHECK (entity_type IN ('memory', 'event_post')),
+    entity_id INTEGER NOT NULL,
+    snapshot JSONB DEFAULT '{}'::jsonb,
+    added_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(page_id, entity_type, entity_id)
+);
+
 CREATE TABLE tag_notifications (
     id SERIAL PRIMARY KEY,
     memory_id INTEGER NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
@@ -178,7 +224,7 @@ CREATE INDEX idx_activity_notifications_student ON activity_notifications(studen
 
 CREATE TABLE images (
     id SERIAL PRIMARY KEY,
-    entity_type VARCHAR(20) NOT NULL CHECK (entity_type IN ('student', 'memory', 'event_post')),
+    entity_type VARCHAR(20) NOT NULL CHECK (entity_type IN ('student', 'memory', 'event_post', 'yearbook_page')),
     entity_id VARCHAR(20) NOT NULL,
     photo_url TEXT NOT NULL,
     sort_order INTEGER DEFAULT 0,
@@ -201,6 +247,10 @@ CREATE INDEX idx_event_posts_event ON event_posts(event_id, created_at DESC);
 CREATE INDEX idx_event_subscriptions_user ON event_subscriptions(user_id, event_id);
 CREATE INDEX idx_bookmarks_user ON bookmarks(user_id, entity_type);
 CREATE INDEX idx_follows_following ON follows(following_id);
+CREATE INDEX idx_yearbook_releases_status ON yearbook_releases(status, year DESC);
+CREATE INDEX idx_yearbook_pages_release ON yearbook_pages(release_id, page_number);
+CREATE INDEX idx_yearbook_pages_assignee ON yearbook_pages(assigned_user_id);
+CREATE INDEX idx_yearbook_posts_page ON yearbook_page_posts(page_id);
 
 GRANT ALL ON SCHEMA public TO yearbook_db_user;
 GRANT ALL ON ALL TABLES IN SCHEMA public TO yearbook_db_user;

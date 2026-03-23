@@ -990,6 +990,7 @@ export const listFeed = async (req, res) => {
   const page = Math.max(Number(req.query.page) || 1, 1);
   const limit = Math.min(Math.max(Number(req.query.limit) || FEED_PAGE_SIZE, 5), 30);
   const offset = (page - 1) * limit;
+  const search = (req.query.search || "").trim();
 
   try {
     const viewer = await fetchViewerProfile(pool, userId);
@@ -998,9 +999,25 @@ export const listFeed = async (req, res) => {
     }
 
     const { clause, params } = buildFeedVisibilityClause(viewer);
-    const query = baseFeedQuery.replace("%VISIBILITY%", clause);
+    let query = baseFeedQuery.replace("%VISIBILITY%", clause);
+    const queryParams = [...params, viewer.student_id];
 
-    const result = await pool.query(query, [...params, viewer.student_id, limit, offset]);
+    if (search) {
+      query = query.replace(
+        "WHERE",
+        "WHERE (m.title ILIKE $%SEARCH_TITLE% OR m.content ILIKE $%SEARCH_BODY%) AND",
+      );
+      queryParams.push(`%${search}%`, `%${search}%`);
+      const searchTitleIndex = queryParams.length - 1;
+      const searchBodyIndex = queryParams.length;
+      query = query
+        .replace("$%SEARCH_TITLE%", `$${searchTitleIndex}`)
+        .replace("$%SEARCH_BODY%", `$${searchBodyIndex}`);
+    }
+
+    queryParams.push(limit, offset);
+
+    const result = await pool.query(query, queryParams);
 
     res.status(200).json({
       page,
