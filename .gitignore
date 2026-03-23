@@ -22,3 +22,5 @@ sample_data.sql
 *.dump
 
 sample_uploades/
+
+AGENTS.md
