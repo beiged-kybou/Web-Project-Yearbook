@@ -1277,9 +1277,6 @@ const Dashboard = () => {
                             <h3>IUT Clubs</h3>
                             <p className="clubs-subtitle">Choose the communities that match your passions.</p>
                         </div>
-                        <button className="refresh-clubs" onClick={fetchClubs} disabled={clubLoading}>
-                            {clubLoading ? 'Refreshing...' : 'Refresh'}
-                        </button>
                     </header>
 
                     {clubError && <div className="error-message">{clubError}</div>}

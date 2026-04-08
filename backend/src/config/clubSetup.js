@@ -2,22 +2,22 @@ const DEFAULT_CLUBS = [
   {
     code: "IUTCS",
     name: "Computer Society",
-    description: "Coding contests, hack nights, and mentoring for aspiring engineers.",
+    description: "Coding contests, hack nights, & mentoring for aspiring engineers.",
   },
   {
     code: "IUTPS",
     name: "Photography Society",
-    description: "Storytelling through lenses, workshops, and photo walks around campus.",
+    description: "Storytelling through lenses, workshops, & photo walks around campus.",
   },
   {
     code: "IUTSIKS",
     name: "Society of Islamic Knowledge Seekers",
-    description: "Weekly halaqas and initiatives that deepen spiritual understanding.",
+    description: "Weekly halaqas & initiatives that deepen spiritual underst&ing.",
   },
   {
     code: "IUTDS",
     name: "Debating Society",
-    description: "Parliamentary debates, public speaking, and adjudication training programs.",
+    description: "Parliamentary debates, public speaking, & adjudication training programs.",
   },
   {
     code: "IUTMOIC",
