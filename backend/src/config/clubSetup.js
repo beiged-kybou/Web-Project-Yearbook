@@ -1,3 +1,5 @@
+import Club from '../models/Club.js';
+
 const DEFAULT_CLUBS = [
   {
     code: "IUTCS",
@@ -26,47 +28,12 @@ const DEFAULT_CLUBS = [
   },
 ];
 
-export const ensureClubSetup = async (pool) => {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS clubs (
-      id SERIAL PRIMARY KEY,
-      code VARCHAR(32) UNIQUE NOT NULL,
-      name VARCHAR(255) NOT NULL,
-      description TEXT,
-      created_at TIMESTAMPTZ DEFAULT NOW()
-    )
-  `);
-
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS club_members (
-      club_id INTEGER NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
-      student_id VARCHAR(32) NOT NULL REFERENCES students(student_id) ON DELETE CASCADE,
-      joined_at TIMESTAMPTZ DEFAULT NOW(),
-      PRIMARY KEY (club_id, student_id)
-    )
-  `);
-
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS tag_notifications (
-      id SERIAL PRIMARY KEY,
-      memory_id INTEGER NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
-      tagged_student_id VARCHAR(32) NOT NULL REFERENCES students(student_id) ON DELETE CASCADE,
-      requested_by_student_id VARCHAR(32) NOT NULL REFERENCES students(student_id) ON DELETE CASCADE,
-      acted_by_student_id VARCHAR(32) REFERENCES students(student_id) ON DELETE SET NULL,
-      status VARCHAR(16) NOT NULL DEFAULT 'pending',
-      note TEXT,
-      created_at TIMESTAMPTZ DEFAULT NOW(),
-      acted_at TIMESTAMPTZ,
-      UNIQUE (memory_id, tagged_student_id)
-    )
-  `);
-
+export const ensureClubSetup = async () => {
   for (const club of DEFAULT_CLUBS) {
-    await pool.query(
-      `INSERT INTO clubs (code, name, description)
-       VALUES ($1, $2, $3)
-       ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description`,
-      [club.code, club.name, club.description],
+    await Club.findOneAndUpdate(
+      { code: club.code },
+      { $set: { name: club.name, description: club.description } },
+      { upsert: true, new: true }
     );
   }
 };

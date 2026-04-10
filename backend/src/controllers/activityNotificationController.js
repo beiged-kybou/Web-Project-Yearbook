@@ -1,35 +1,29 @@
 import notificationService from "../services/notificationService.js";
+import User from "../models/User.js";
 
-const ensureStudentContext = async (pool, userId) => {
-  const result = await pool.query(
-    `SELECT student_id
-     FROM users
-     WHERE id = $1`,
-    [userId],
-  );
-
-  if (result.rows.length === 0) {
+const ensureStudentContext = async (userId) => {
+  const user = await User.findById(userId).populate('studentId');
+  
+  if (!user) {
     throw new Error("USER_NOT_FOUND");
   }
 
-  const studentId = result.rows[0].student_id;
-  if (!studentId) {
+  if (!user.studentId || !user.studentId.studentId) {
     throw new Error("PROFILE_REQUIRED");
   }
 
-  return studentId;
+  return user.studentId.studentId;
 };
 
 export const listActivityNotifications = async (req, res) => {
-  const pool = await req.app.locals.getPool();
   const { userId } = req.user;
   const page = Math.max(Number(req.query.page) || 1, 1);
   const limit = Math.min(Math.max(Number(req.query.limit) || 20, 5), 50);
   const offset = (page - 1) * limit;
 
   try {
-    const studentId = await ensureStudentContext(pool, userId);
-    const result = await notificationService.listForStudent(pool, studentId, { limit, offset });
+    const studentId = await ensureStudentContext(userId);
+    const result = await notificationService.listForStudent(studentId, { limit, offset });
 
     return res.status(200).json({
       page,
@@ -53,13 +47,12 @@ export const listActivityNotifications = async (req, res) => {
 };
 
 export const markActivityNotificationRead = async (req, res) => {
-  const pool = await req.app.locals.getPool();
   const { userId } = req.user;
   const { notificationId } = req.params;
 
   try {
-    const studentId = await ensureStudentContext(pool, userId);
-    await notificationService.markRead(pool, studentId, notificationId);
+    const studentId = await ensureStudentContext(userId);
+    await notificationService.markRead(studentId, notificationId);
     return res.status(200).json({ success: true });
   } catch (error) {
     if (error.message === "USER_NOT_FOUND") {
@@ -77,12 +70,11 @@ export const markActivityNotificationRead = async (req, res) => {
 };
 
 export const markAllActivityNotificationsRead = async (req, res) => {
-  const pool = await req.app.locals.getPool();
   const { userId } = req.user;
 
   try {
-    const studentId = await ensureStudentContext(pool, userId);
-    await notificationService.markAllRead(pool, studentId);
+    const studentId = await ensureStudentContext(userId);
+    await notificationService.markAllRead(studentId);
     return res.status(200).json({ success: true });
   } catch (error) {
     if (error.message === "USER_NOT_FOUND") {

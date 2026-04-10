@@ -1,3 +1,6 @@
+import ActivityNotification from "../models/ActivityNotification.js";
+import Memory from "../models/Memory.js";
+
 const NOTIFICATION_TYPES = {
   REACTION: "reaction",
   COMMENT: "comment",
@@ -8,12 +11,11 @@ const buildActorSnapshot = (student) => {
   if (!student) {
     return null;
   }
-
   return {
-    studentId: student.student_id,
-    firstName: student.first_name,
-    lastName: student.last_name,
-    photoUrl: student.photo_url,
+    studentId: student.studentId || student.student_id,
+    firstName: student.firstName || student.first_name,
+    lastName: student.lastName || student.last_name,
+    photoUrl: student.photoUrl || student.photo_url,
   };
 };
 
@@ -21,15 +23,14 @@ const buildMemorySnapshot = (memory) => {
   if (!memory) {
     return null;
   }
-
   return {
-    memoryId: memory.id,
+    memoryId: memory._id || memory.id,
     title: memory.title,
-    createdBy: memory.created_by,
+    createdBy: memory.createdBy || memory.created_by,
   };
 };
 
-const createNotification = async (pool, { recipientId, actorId, memoryId, type, payload = {} }) => {
+const createNotification = async ({ recipientId, actorId, memoryId, type, payload = {} }) => {
   if (!recipientId || recipientId === actorId) {
     return null;
   }
@@ -38,30 +39,35 @@ const createNotification = async (pool, { recipientId, actorId, memoryId, type, 
     throw new Error("INVALID_NOTIFICATION_TYPE");
   }
 
-  await pool.query(
-    `INSERT INTO activity_notifications (student_id, actor_student_id, memory_id, notification_type, payload)
-     VALUES ($1, $2, $3, $4, $5)
-     ON CONFLICT (notification_type, memory_id, actor_student_id)
-     DO UPDATE SET
-       payload = EXCLUDED.payload,
-       created_at = NOW(),
-       is_read = FALSE`,
-    [recipientId, actorId || null, memoryId || null, type, payload],
+  await ActivityNotification.findOneAndUpdate(
+    {
+      studentId: recipientId,
+      actorStudentId: actorId || null,
+      memoryId: memoryId || null,
+      notificationType: type
+    },
+    {
+      $set: {
+        payload,
+      },
+      $setOnInsert: { isRead: false }
+    },
+    { upsert: true }
   );
 };
 
 const notificationService = {
   NOTIFICATION_TYPES,
 
-  async notifyMemoryCreator(pool, { memory, actor, type, extraPayload = {} }) {
-    if (!memory?.created_by) {
+  async notifyMemoryCreator({ memory, actor, type, extraPayload = {} }) {
+    if (!memory?.createdBy && !memory?.created_by) {
       return;
     }
 
-    await createNotification(pool, {
-      recipientId: memory.created_by,
-      actorId: actor?.student_id,
-      memoryId: memory.id,
+    await createNotification({
+      recipientId: memory.createdBy || memory.created_by,
+      actorId: actor?.studentId || actor?.student_id,
+      memoryId: memory._id || memory.id,
       type,
       payload: {
         actor: buildActorSnapshot(actor),
@@ -71,36 +77,25 @@ const notificationService = {
     });
   },
 
-  async notifyParticipants(pool, { memoryId, actor, type, extraPayload = {} }) {
+  async notifyParticipants({ memoryId, actor, type, extraPayload = {} }) {
     if (!memoryId) {
       return;
     }
 
-    const participantsResult = await pool.query(
-      `SELECT DISTINCT student_id
-       FROM memory_participants
-       WHERE memory_id = $1 AND student_id <> $2`,
-      [memoryId, actor?.student_id || null],
-    );
+    const memory = await Memory.findById(memoryId).populate('participants');
+    if (!memory) return;
 
-    if (participantsResult.rows.length === 0) {
-      return;
-    }
-
-    const memoryResult = await pool.query(
-      `SELECT id, title, created_by
-       FROM memories
-       WHERE id = $1`,
-      [memoryId],
-    );
-
-    const memory = memoryResult.rows[0] || null;
+    const actorId = actor?.studentId || actor?.student_id;
+    const participants = memory.participants || [];
+    
+    // Notify all participants except the actor
+    const participantsToNotify = participants.filter(p => p.studentId !== actorId);
 
     await Promise.all(
-      participantsResult.rows.map((participant) =>
-        createNotification(pool, {
-          recipientId: participant.student_id,
-          actorId: actor?.student_id,
+      participantsToNotify.map((participant) =>
+        createNotification({
+          recipientId: participant.studentId,
+          actorId,
           memoryId,
           type,
           payload: {
@@ -108,69 +103,55 @@ const notificationService = {
             memory: buildMemorySnapshot(memory),
             ...extraPayload,
           },
-        }),
-      ),
+        })
+      )
     );
   },
 
-  async listForStudent(pool, studentId, { limit = 20, offset = 0 } = {}) {
+  async listForStudent(studentId, { limit = 20, offset = 0 } = {}) {
     if (!studentId) {
       return { notifications: [], total: 0 };
     }
 
-    const result = await pool.query(
-      `SELECT id, actor_student_id, memory_id, notification_type, payload, is_read, created_at
-       FROM activity_notifications
-       WHERE student_id = $1
-       ORDER BY created_at DESC
-       LIMIT $2 OFFSET $3`,
-      [studentId, limit, offset],
-    );
-
-    const countResult = await pool.query(
-      `SELECT COUNT(*)::int AS total
-       FROM activity_notifications
-       WHERE student_id = $1`,
-      [studentId],
-    );
+    const [notifications, total] = await Promise.all([
+      ActivityNotification.find({ studentId })
+        .sort({ created_at: -1 })
+        .limit(limit)
+        .skip(offset),
+      ActivityNotification.countDocuments({ studentId })
+    ]);
 
     return {
-      notifications: result.rows.map((row) => ({
-        id: row.id,
-        actorStudentId: row.actor_student_id,
-        memoryId: row.memory_id,
-        type: row.notification_type,
-        payload: row.payload,
-        isRead: row.is_read,
-        createdAt: row.created_at,
+      notifications: notifications.map(notif => ({
+        id: notif._id,
+        actorStudentId: notif.actorStudentId,
+        memoryId: notif.memoryId,
+        type: notif.notificationType,
+        payload: notif.payload,
+        isRead: notif.isRead,
+        createdAt: notif.created_at
       })),
-      total: countResult.rows[0]?.total || 0,
+      total
     };
   },
 
-  async markRead(pool, studentId, notificationId) {
+  async markRead(studentId, notificationId) {
     if (!studentId || !notificationId) {
       return;
     }
-
-    await pool.query(
-      `UPDATE activity_notifications
-       SET is_read = TRUE
-       WHERE id = $1 AND student_id = $2`,
-      [notificationId, studentId],
+    await ActivityNotification.findOneAndUpdate(
+      { _id: notificationId, studentId },
+      { $set: { isRead: true } }
     );
   },
 
-  async markAllRead(pool, studentId) {
+  async markAllRead(studentId) {
     if (!studentId) {
       return;
     }
-
-    await pool.query(
-      `UPDATE activity_notifications
-       SET is_read = TRUE
-       WHERE student_id = $1 AND is_read = FALSE`,
-      [studentId],
+    await ActivityNotification.updateMany(
+      { studentId, isRead: false },
+      { $set: { isRead: true } }
     );
   },
 };

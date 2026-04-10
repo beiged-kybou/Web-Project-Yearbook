@@ -4,21 +4,23 @@ import otpService from "../services/otpService.js";
 import { sendOtpMail } from "../utils/mailer.js";
 import { parseStudentName } from "../utils/parseStudentName.js";
 import { isRootAdmin } from "../config/rootAdmins.js";
+import User from "../models/User.js";
+import OtpVerification from "../models/OtpVerification.js";
+import Student from "../models/Student.js";
+import Department from "../models/Department.js";
+import Yearbook from "../models/Yearbook.js";
 
 export const requestOtp = async (req, res) => {
   const email = req.body.email?.trim().toLowerCase();
   if (!email || !/^[a-z0-9._%+-]+@iut-dhaka\.edu$/i.test(email)) {
     return res.status(400).json({ error: "A valid IUT email is required" });
   }
-  const pool = await req.app.locals.getPool();
 
   try {
-    const userCheck = await pool.query(
-      "SELECT id, role FROM users WHERE email = $1",
-      [email],
-    );
-    if (userCheck.rows.length > 0) {
-      const existingRole = userCheck.rows[0].role;
+    const existingUser = await User.findOne({ email: new RegExp('^' + email + '$', 'i') }).select("role");
+    
+    if (existingUser) {
+      const existingRole = existingUser.role;
       return res.status(409).json({
         error:
           existingRole === "admin"
@@ -30,18 +32,16 @@ export const requestOtp = async (req, res) => {
     const otp = otpService.generateOtp();
     const { otp_code, otp_expires_at } = otpService.buildOtpUpdatePayload(otp);
 
-    const upsertOtpQuery = `
-      INSERT INTO otp_verifications (email, otp_hash, expires_at)
-      VALUES ($1, $2, $3)
-      ON CONFLICT (email)
-      DO UPDATE SET
-        otp_hash = EXCLUDED.otp_hash,
-        expires_at = EXCLUDED.expires_at,
-        attempts = 0,
-        created_at = NOW();
-    `;
+    await OtpVerification.findOneAndUpdate(
+      { email },
+      {
+        otpHash: otp_code,
+        expiresAt: otp_expires_at,
+        attempts: 0
+      },
+      { upsert: true, new: true }
+    );
 
-    await pool.query(upsertOtpQuery, [email, otp_code, otp_expires_at]);
     await sendOtpMail(email, otp);
 
     res.status(200).json({ message: "Verification code sent to mail" });
@@ -53,36 +53,30 @@ export const requestOtp = async (req, res) => {
 
 export const verifyOtp = async (req, res) => {
   const { email, otp } = req.body;
-  const pool = await req.app.locals.getPool();
 
   try {
-    const result = await pool.query(
-      "SELECT otp_hash, expires_at, attempts FROM otp_verifications WHERE email = $1",
-      [email],
-    );
+    const verification = await OtpVerification.findOne({ email: new RegExp('^' + email + '$', 'i') });
 
-    if (result.rows.length === 0) {
+    if (!verification) {
       return res.status(404).json({ error: "No pending verification found." });
     }
 
-    const { otp_hash, expires_at, attempts } = result.rows[0];
-
-    if (attempts >= 5) {
+    if (verification.attempts >= 5) {
       return res
         .status(429)
         .json({ error: "Too many attempts. Please request a new OTP." });
     }
 
-    if (otpService.isOtpExpired(expires_at)) {
+    if (otpService.isOtpExpired(verification.expiresAt)) {
       return res.status(410).json({ error: "OTP expired." });
     }
 
-    const isValid = otpService.verifyOtp(otp, otp_hash);
+    const isValid = otpService.verifyOtp(otp, verification.otpHash);
 
     if (!isValid) {
-      await pool.query(
-        "UPDATE otp_verifications SET attempts = attempts + 1 WHERE email = $1",
-        [email],
+      await OtpVerification.updateOne(
+        { email },
+        { $inc: { attempts: 1 } }
       );
       return res.status(401).json({ error: "Invalid code." });
     }
@@ -90,7 +84,7 @@ export const verifyOtp = async (req, res) => {
     const registrationToken = jwt.sign(
       { email, purpose: "registration" },
       process.env.JWT_SECRET,
-      { expiresIn: "15m" },
+      { expiresIn: "15m" }
     );
 
     res.status(200).json({
@@ -105,7 +99,6 @@ export const verifyOtp = async (req, res) => {
 
 export const completeRegistration = async (req, res) => {
   const { registrationToken, password, accountName } = req.body;
-  const pool = await req.app.locals.getPool();
 
   try {
     let decoded;
@@ -138,8 +131,7 @@ export const completeRegistration = async (req, res) => {
       });
     }
 
-    const { fullName, firstName, lastName, studentId, batch, department } =
-      parsed;
+    const { fullName, firstName, lastName, studentId, batch, department } = parsed;
 
     if (!department) {
       return res.status(400).json({
@@ -148,24 +140,19 @@ export const completeRegistration = async (req, res) => {
       });
     }
 
-    const existingUser = await pool.query(
-      "SELECT id FROM users WHERE email = $1",
-      [email],
-    );
-
-    if (existingUser.rows.length > 0) {
+    const existingUserByEmail = await User.findOne({ email: new RegExp('^' + email + '$', 'i') });
+    if (existingUserByEmail) {
       return res.status(409).json({ error: "User already registered." });
     }
 
-    const studentLinkCheck = await pool.query(
-      "SELECT id FROM users WHERE student_id = $1",
-      [studentId],
-    );
-
-    if (studentLinkCheck.rows.length > 0) {
-      return res
-        .status(409)
-        .json({ error: "Student ID already linked to another account." });
+    const studentOpt = await Student.findOne({ studentId });
+    if (studentOpt) {
+       const studentLinkCheck = await User.findOne({ studentId: studentOpt._id });
+       if (studentLinkCheck) {
+         return res
+           .status(409)
+           .json({ error: "Student ID already linked to another account." });
+       }
     }
 
     const saltRounds = 10;
@@ -174,67 +161,56 @@ export const completeRegistration = async (req, res) => {
     const batchYear = parseInt("20" + batch, 10);
     const graduationYear = batchYear + 4;
 
-    await pool.query(
-      `INSERT INTO departments (code, name)
-       VALUES ($1, $2)
-       ON CONFLICT (code) DO NOTHING`,
-      [
-        department,
-        department === "CSE"
-          ? "Computer Science and Engineering"
-          : "Civil and Environmental Engineering",
-      ],
+    await Department.findOneAndUpdate(
+      { code: department },
+      { $setOnInsert: { name: department === "CSE" ? "Computer Science and Engineering" : "Civil and Environmental Engineering" } },
+      { upsert: true, new: true }
     );
 
-    await pool.query(
-      `INSERT INTO yearbooks (year)
-       VALUES ($1)
-       ON CONFLICT (year) DO NOTHING`,
-      [graduationYear],
+    const yearbookObj = await Yearbook.findOneAndUpdate(
+      { year: graduationYear },
+      { $setOnInsert: { theme: null } },
+      { upsert: true, new: true }
     );
 
-    await pool.query(
-      `INSERT INTO students (student_id, first_name, last_name, email, department, graduation_year)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       ON CONFLICT (student_id) DO UPDATE SET
-         email = COALESCE(EXCLUDED.email, students.email),
-         first_name = EXCLUDED.first_name,
-         last_name = EXCLUDED.last_name`,
-      [studentId, firstName, lastName, email, department, graduationYear],
+    const studentRec = await Student.findOneAndUpdate(
+      { studentId },
+      {
+         $set: {
+            firstName: firstName, 
+            lastName: lastName,
+            graduationYear: yearbookObj._id,
+            department
+         },
+         $setOnInsert: { email }
+      },
+      { upsert: true, new: true }
     );
 
-    const insertQuery = `
-      INSERT INTO users (email, password_hash, display_name, student_id, role)
-      VALUES ($1, $2, $3, $4, $5)
-      RETURNING id, email, display_name, role, created_at, student_id
-    `;
-
-    const result = await pool.query(insertQuery, [
+    const newUser = await User.create({
       email,
       passwordHash,
-      fullName,
-      studentId,
-      isRootAdmin(email) ? "admin" : "student",
-    ]);
+      displayName: fullName,
+      studentId: studentRec._id,
+      role: isRootAdmin(email) ? "admin" : "student"
+    });
 
-    const newUser = result.rows[0];
-
-    await pool.query("DELETE FROM otp_verifications WHERE email = $1", [email]);
+    await OtpVerification.deleteOne({ email });
 
     const accessToken = jwt.sign(
-      { userId: newUser.id, email: newUser.email, role: newUser.role },
+      { userId: newUser._id, email: newUser.email, role: newUser.role },
       process.env.JWT_SECRET,
-      { expiresIn: "7d" },
+      { expiresIn: "7d" }
     );
 
     res.status(201).json({
       message: "Registration completed successfully.",
       user: {
-        id: newUser.id,
+        id: newUser._id,
         email: newUser.email,
-        displayName: newUser.display_name,
+        displayName: newUser.displayName,
         role: newUser.role,
-        studentId: newUser.student_id,
+        studentId: studentRec.studentId,
         batch,
         department,
         createdAt: newUser.created_at,
@@ -249,7 +225,6 @@ export const completeRegistration = async (req, res) => {
 
 export const login = async (req, res) => {
   const { email, password } = req.body;
-  const pool = await req.app.locals.getPool();
 
   try {
     if (!email || !password) {
@@ -258,22 +233,16 @@ export const login = async (req, res) => {
         .json({ error: "Email and password are required." });
     }
 
-    const result = await pool.query(
-      `SELECT u.id, u.email, u.password_hash, u.display_name, u.role, u.avatar_url, u.student_id,
-              s.department, s.graduation_year
-       FROM users u
-       LEFT JOIN students s ON u.student_id = s.student_id
-       WHERE u.email = $1`,
-      [email],
-    );
+    const user = await User.findOne({ email: new RegExp('^' + email + '$', 'i') }).populate({
+        path: 'studentId',
+        populate: { path: 'graduationYear' }
+    });
 
-    if (result.rows.length === 0) {
+    if (!user) {
       return res.status(401).json({ error: "Invalid email or password." });
     }
 
-    const user = result.rows[0];
-
-    if (!user.password_hash) {
+    if (!user.passwordHash) {
       return res
         .status(401)
         .json({
@@ -281,35 +250,35 @@ export const login = async (req, res) => {
         });
     }
 
-    const isValid = await bcrypt.compare(password, user.password_hash);
+    const isValid = await bcrypt.compare(password, user.passwordHash);
     if (!isValid) {
       return res.status(401).json({ error: "Invalid email or password." });
     }
 
-    await pool.query("UPDATE users SET last_login = NOW() WHERE id = $1", [
-      user.id,
-    ]);
+    user.lastLogin = new Date();
+    await user.save();
 
     const accessToken = jwt.sign(
-      { userId: user.id, email: user.email, role: user.role },
+      { userId: user._id, email: user.email, role: user.role },
       process.env.JWT_SECRET,
-      { expiresIn: "7d" },
+      { expiresIn: "7d" }
     );
 
-    const batchYear = user.graduation_year ? user.graduation_year - 4 : null;
+    const gradYear = user.studentId?.graduationYear?.year;
+    const batchYear = gradYear ? gradYear - 4 : null;
     const batch = batchYear ? String(batchYear).slice(-2) : null;
 
     res.status(200).json({
       message: "Login successful.",
       user: {
-        id: user.id,
+        id: user._id,
         email: user.email,
-        displayName: user.display_name,
+        displayName: user.displayName,
         role: user.role,
-        avatarUrl: user.avatar_url,
-        studentId: user.student_id,
-        department: user.department,
-        graduationYear: user.graduation_year,
+        avatarUrl: user.avatarUrl,
+        studentId: user.studentId?.studentId,
+        department: user.studentId?.department,
+        graduationYear: gradYear,
         batch,
       },
       accessToken,

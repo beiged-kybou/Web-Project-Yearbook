@@ -1,44 +1,43 @@
+import Club from '../models/Club.js';
+import User from '../models/User.js';
+
 const buildStudentSummary = (student) =>
   student
     ? {
-        studentId: student.student_id,
-        firstName: student.first_name,
-        lastName: student.last_name,
+        studentId: student.studentId,
+        firstName: student.firstName,
+        lastName: student.lastName,
         department: student.department,
-        graduationYear: student.graduation_year,
-        photoUrl: student.photo_url,
+        graduationYear: student.graduationYear?.year || student.graduationYear,
+        photoUrl: student.photoUrl,
       }
     : null;
 
 export const listClubs = async (req, res) => {
   try {
-    const pool = await req.app.locals.getPool();
-    const clubsResult = await pool.query(
-      `SELECT c.id, c.code, c.name, c.description,
-              jsonb_build_object(
-                'count', COUNT(cm.student_id),
-                'recentMembers', COALESCE(
-                  jsonb_agg(
-                    jsonb_build_object(
-                      'student_id', s.student_id,
-                      'first_name', s.first_name,
-                      'last_name', s.last_name,
-                      'department', s.department,
-                      'graduation_year', s.graduation_year,
-                      'photo_url', s.photo_url
-                    ) ORDER BY cm.joined_at DESC
-                  ) FILTER (WHERE cm.student_id IS NOT NULL),
-                  '[]'::jsonb
-                )
-              ) AS members
-       FROM clubs c
-       LEFT JOIN club_members cm ON cm.club_id = c.id
-       LEFT JOIN students s ON cm.student_id = s.student_id
-       GROUP BY c.id
-       ORDER BY c.name ASC`,
-    );
+    const clubsResult = await Club.find().populate({
+      path: 'members.studentId',
+      select: 'studentId firstName lastName department graduationYear photoUrl',
+      populate: { path: 'graduationYear' }
+    }).sort({ name: 1 });
 
-    res.json({ clubs: clubsResult.rows });
+    const clubs = clubsResult.map(c => {
+      const sortedMembers = [...c.members].sort((a, b) => b.joinedAt - a.joinedAt);
+      const recentMembers = sortedMembers.map(m => buildStudentSummary(m.studentId)).filter(Boolean);
+      
+      return {
+        id: c._id,
+        code: c.code,
+        name: c.name,
+        description: c.description,
+        members: {
+          count: c.members.length,
+          recentMembers: recentMembers
+        }
+      };
+    });
+
+    res.json({ clubs });
   } catch (error) {
     console.error("List Clubs Error:", error);
     res.status(500).json({ error: "Failed to load clubs." });
@@ -46,7 +45,6 @@ export const listClubs = async (req, res) => {
 };
 
 export const joinClub = async (req, res) => {
-  const pool = await req.app.locals.getPool();
   const { userId } = req.user;
   const { clubCode } = req.params;
 
@@ -55,48 +53,33 @@ export const joinClub = async (req, res) => {
   }
 
   try {
-    const userResult = await pool.query(
-      `SELECT u.student_id, s.first_name, s.last_name, s.department, s.graduation_year, s.photo_url
-       FROM users u
-       LEFT JOIN students s ON u.student_id = s.student_id
-       WHERE u.id = $1`,
-      [userId],
-    );
-
-    if (userResult.rows.length === 0) {
-      return res.status(404).json({ error: "User not found." });
-    }
-
-    const student = userResult.rows[0];
-    if (!student.student_id) {
+    const user = await User.findById(userId).populate({
+        path: 'studentId',
+        populate: { path: 'graduationYear' }
+    });
+    if (!user || !user.studentId) {
       return res.status(400).json({ error: "Link a student profile before joining clubs." });
     }
+    const student = user.studentId;
 
-    const clubResult = await pool.query(`SELECT id, name FROM clubs WHERE code = $1`, [clubCode]);
-    if (clubResult.rows.length === 0) {
+    const club = await Club.findOne({ code: clubCode });
+    if (!club) {
       return res.status(404).json({ error: "Club not found." });
     }
 
-    const clubId = clubResult.rows[0].id;
-
-    await pool.query(
-      `INSERT INTO club_members (club_id, student_id)
-       VALUES ($1, $2)
-       ON CONFLICT (club_id, student_id) DO NOTHING`,
-      [clubId, student.student_id],
-    );
-
-    const membershipResult = await pool.query(
-      `SELECT COUNT(*) AS member_count FROM club_members WHERE club_id = $1`,
-      [clubId],
-    );
+    // Add member if not exists
+    const isMember = club.members.some(m => String(m.studentId) === String(student._id));
+    if (!isMember) {
+        club.members.push({ studentId: student._id });
+        await club.save();
+    }
 
     res.status(201).json({
-      message: `Joined ${clubResult.rows[0].name}.`,
+      message: `Joined ${club.name}.`,
       membership: {
-        clubId,
+        clubId: club._id,
         clubCode,
-        memberCount: Number(membershipResult.rows[0].member_count),
+        memberCount: club.members.length,
         member: buildStudentSummary(student),
       },
     });
@@ -107,7 +90,6 @@ export const joinClub = async (req, res) => {
 };
 
 export const leaveClub = async (req, res) => {
-  const pool = await req.app.locals.getPool();
   const { userId } = req.user;
   const { clubCode } = req.params;
 
@@ -116,43 +98,32 @@ export const leaveClub = async (req, res) => {
   }
 
   try {
-    const userResult = await pool.query(`SELECT student_id FROM users WHERE id = $1`, [userId]);
-    if (userResult.rows.length === 0) {
-      return res.status(404).json({ error: "User not found." });
-    }
-
-    const studentId = userResult.rows[0].student_id;
-    if (!studentId) {
+    const user = await User.findById(userId).populate('studentId');
+    if (!user || !user.studentId) {
       return res.status(400).json({ error: "Link a student profile before leaving clubs." });
     }
+    const studentId = user.studentId._id;
 
-    const clubResult = await pool.query(`SELECT id, name FROM clubs WHERE code = $1`, [clubCode]);
-    if (clubResult.rows.length === 0) {
+    const club = await Club.findOne({ code: clubCode });
+    if (!club) {
       return res.status(404).json({ error: "Club not found." });
     }
 
-    const clubId = clubResult.rows[0].id;
+    const initialLength = club.members.length;
+    club.members = club.members.filter(m => String(m.studentId) !== String(studentId));
 
-    const deletionResult = await pool.query(
-      `DELETE FROM club_members WHERE club_id = $1 AND student_id = $2 RETURNING club_id`,
-      [clubId, studentId],
-    );
-
-    if (deletionResult.rows.length === 0) {
+    if (club.members.length === initialLength) {
       return res.status(404).json({ error: "You are not a member of this club." });
     }
 
-    const membershipResult = await pool.query(
-      `SELECT COUNT(*) AS member_count FROM club_members WHERE club_id = $1`,
-      [clubId],
-    );
+    await club.save();
 
     res.json({
-      message: `Left ${clubResult.rows[0].name}.`,
+      message: `Left ${club.name}.`,
       membership: {
-        clubId,
+        clubId: club._id,
         clubCode,
-        memberCount: Number(membershipResult.rows[0].member_count),
+        memberCount: club.members.length,
       },
     });
   } catch (error) {
@@ -163,33 +134,28 @@ export const leaveClub = async (req, res) => {
 
 export const myClubs = async (req, res) => {
   try {
-    const pool = await req.app.locals.getPool();
     const { userId } = req.user;
 
-    const userResult = await pool.query(
-      `SELECT student_id FROM users WHERE id = $1`,
-      [userId],
-    );
-
-    if (userResult.rows.length === 0) {
-      return res.status(404).json({ error: "User not found." });
-    }
-
-    const studentId = userResult.rows[0].student_id;
-    if (!studentId) {
+    const user = await User.findById(userId).populate('studentId');
+    if (!user || !user.studentId) {
       return res.status(400).json({ error: "Link a student profile before viewing clubs." });
     }
+    const studentId = user.studentId._id;
 
-    const clubsResult = await pool.query(
-      `SELECT c.id, c.code, c.name, c.description, cm.joined_at
-       FROM club_members cm
-       JOIN clubs c ON cm.club_id = c.id
-       WHERE cm.student_id = $1
-       ORDER BY cm.joined_at DESC`,
-      [studentId],
-    );
+    const clubsResult = await Club.find({ 'members.studentId': studentId }).lean();
 
-    res.json({ clubs: clubsResult.rows });
+    const clubs = clubsResult.map(c => {
+      const membership = c.members.find(m => String(m.studentId) === String(studentId));
+      return {
+        id: c._id,
+        code: c.code,
+        name: c.name,
+        description: c.description,
+        joined_at: membership ? membership.joinedAt : null
+      };
+    }).sort((a, b) => new Date(b.joined_at) - new Date(a.joined_at));
+
+    res.json({ clubs });
   } catch (error) {
     console.error("My Clubs Error:", error);
     res.status(500).json({ error: "Failed to load memberships." });

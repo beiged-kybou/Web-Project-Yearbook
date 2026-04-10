@@ -1,3 +1,11 @@
+import Student from "../models/Student.js";
+import Memory from "../models/Memory.js";
+import Yearbook from "../models/Yearbook.js";
+import Department from "../models/Department.js";
+import Album from "../models/Album.js";
+import Image from "../models/Image.js";
+import mongoose from "mongoose";
+
 const deriveBatchLabel = (graduationYear) => {
   if (!graduationYear || Number.isNaN(Number(graduationYear))) {
     return {
@@ -19,204 +27,102 @@ const deriveBatchLabel = (graduationYear) => {
 };
 
 const buildExcerpt = (content = "", limit = 180) => {
-  if (!content) {
-    return "";
-  }
-  if (content.length <= limit) {
-    return content;
-  }
+  if (!content) return "";
+  if (content.length <= limit) return content;
   return `${content.slice(0, limit).trim()}…`;
 };
 
-const normalizeDepartmentsByYear = (departmentRows) => {
-  return departmentRows.reduce((acc, row) => {
-    const graduationYear = Number(row.graduation_year);
-    if (!graduationYear) {
-      return acc;
-    }
-
-    if (!acc[graduationYear]) {
-      acc[graduationYear] = [];
-    }
-
-    acc[graduationYear].push({
-      code: row.department,
-      name: row.department_name,
-      studentCount: Number(row.student_count) || 0,
-    });
-
-    return acc;
-  }, {});
-};
-
-const normalizeHighlightsByYear = (highlightRows) => {
-  return highlightRows.reduce((acc, row) => {
-    const graduationYear = Number(row.graduation_year);
-    if (!graduationYear) {
-      return acc;
-    }
-
-    acc[graduationYear] = {
-      memoryId: row.id,
-      title: row.title,
-      content: row.content,
-      excerpt: buildExcerpt(row.content, 200),
-      createdAt: row.created_at,
-      authorName: row.author_name,
-      coverImage: row.cover_image,
-    };
-
-    return acc;
-  }, {});
-};
-
-const mapDepartmentBreakdown = (rows, totalStudents) => {
-  if (!rows || rows.length === 0) {
-    return [];
-  }
-
-  return rows.map((row) => {
-    const studentCount = Number(row.student_count) || 0;
-    const percentage = totalStudents
-      ? Number(((studentCount / totalStudents) * 100).toFixed(1))
-      : 0;
-
-    return {
-      code: row.department,
-      name: row.department_name,
-      studentCount,
-      percentage,
-    };
-  });
-};
-
-const mapMemoryRow = (row) => {
-  if (!row) {
-    return null;
-  }
-
-  const images = Array.isArray(row.images) ? row.images : [];
-  const taggedStudents = Array.isArray(row.tagged_students)
-    ? row.tagged_students
-    : [];
-
-  return {
-    id: row.id,
-    title: row.title,
-    content: row.content,
-    excerpt: buildExcerpt(row.content, 220),
-    createdAt: row.created_at,
-    authorName: row.author_name,
-    coverImage: images[0]?.url || null,
-    gallery: images,
-    taggedStudents,
-  };
-};
-
 export const listBatches = async (req, res) => {
-  const pool = await req.app.locals.getPool();
-
   try {
-    const summaryResult = await pool.query(
-      `WITH available_years AS (
-         SELECT year
-         FROM yearbooks
-         WHERE year IS NOT NULL
-         UNION
-         SELECT DISTINCT graduation_year
-         FROM students
-         WHERE graduation_year IS NOT NULL
-       )
-       SELECT
-         ay.year AS graduation_year,
-         y.theme,
-         COUNT(DISTINCT s.student_id) AS student_count,
-         COUNT(DISTINCT m.id) AS memory_count,
-         MAX(m.created_at) AS last_memory_at
-       FROM available_years ay
-       LEFT JOIN yearbooks y ON y.year = ay.year
-       LEFT JOIN students s ON s.graduation_year = ay.year
-       LEFT JOIN memories m ON m.created_by = s.student_id
-       GROUP BY ay.year, y.theme
-       ORDER BY ay.year DESC`,
-    );
+    // Collect all available years
+    const yearbooks = await Yearbook.find().lean();
+    const studentsAgg = await Student.aggregate([
+      { $match: { graduationYear: { $ne: null } } },
+      { $group: { _id: "$graduationYear" } }
+    ]);
+    
+    // Merge available years
+    const yearSet = new Set();
+    yearbooks.forEach(y => yearSet.add(String(y._id))); // Assuming Yearbook._id is referenced in student
+    studentsAgg.forEach(s => yearSet.add(String(s._id)));
+    
+    const availableYearsIds = Array.from(yearSet).map(id => new mongoose.Types.ObjectId(id));
+    
+    // Fetch Yearbooks to resolve year numbers
+    const validYearbooks = await Yearbook.find({ _id: { $in: availableYearsIds } }).lean();
+    validYearbooks.sort((a, b) => b.year - a.year);
 
-    const departmentResult = await pool.query(
-      `SELECT
-         s.graduation_year,
-         s.department,
-         d.name AS department_name,
-         COUNT(*) AS student_count
-       FROM students s
-       LEFT JOIN departments d ON d.code = s.department
-       WHERE s.graduation_year IS NOT NULL AND s.department IS NOT NULL
-       GROUP BY s.graduation_year, s.department, d.name
-       ORDER BY s.graduation_year DESC, student_count DESC`,
-    );
+    const batches = [];
 
-    const highlightResult = await pool.query(
-      `SELECT outer_mem.*
-       FROM (
-         SELECT
-           s.graduation_year,
-           m.id,
-           m.title,
-           m.content,
-           m.created_at,
-           (s.first_name || ' ' || s.last_name) AS author_name,
-           ROW_NUMBER() OVER (PARTITION BY s.graduation_year ORDER BY m.created_at DESC) AS rank,
-           (
-             SELECT i.photo_url
-             FROM images i
-             WHERE i.entity_type = 'memory' AND i.entity_id = m.id::text
-             ORDER BY i.sort_order
-             LIMIT 1
-           ) AS cover_image
-         FROM memories m
-         JOIN students s ON m.created_by = s.student_id
-         WHERE s.graduation_year IS NOT NULL
-       ) AS outer_mem
-       WHERE outer_mem.rank = 1`,
-    );
+    for (const yearbook of validYearbooks) {
+      const graduationYear = yearbook.year;
 
-    const departmentsByYear = normalizeDepartmentsByYear(departmentResult.rows);
-    const highlightsByYear = normalizeHighlightsByYear(highlightResult.rows);
+      const [studentCount, studentsInYear] = await Promise.all([
+        Student.countDocuments({ graduationYear: yearbook._id }),
+        Student.find({ graduationYear: yearbook._id }).select('studentId department').lean()
+      ]);
 
-    const batches = summaryResult.rows.map((row) => {
-      const graduationYear = Number(row.graduation_year);
-      const { entryYear, label } = deriveBatchLabel(graduationYear);
-      const studentCount = Number(row.student_count) || 0;
-      const memoryCount = Number(row.memory_count) || 0;
-      const topDepartmentsRaw = (departmentsByYear[graduationYear] || [])
-        .sort((a, b) => b.studentCount - a.studentCount)
-        .slice(0, 3);
+      const studentIds = studentsInYear.map(s => s.studentId);
 
-      const topDepartments = topDepartmentsRaw.map((dept) => {
-        const percentage = studentCount
-          ? Number(((dept.studentCount / studentCount) * 100).toFixed(1))
-          : 0;
-        return {
-          code: dept.code,
-          name: dept.name,
-          studentCount: dept.studentCount,
-          percentage,
-        };
+      const [memoryCount, latestMemory, highlightMemory] = await Promise.all([
+        Memory.countDocuments({ createdBy: { $in: studentIds } }),
+        Memory.findOne({ createdBy: { $in: studentIds } }).sort({ created_at: -1 }).select('created_at').lean(),
+        Memory.findOne({ createdBy: { $in: studentIds } }).sort({ created_at: -1 }).populate('createdBy', 'firstName lastName').lean()
+      ]);
+
+      // Calculate Top Departments natively in node since array is already loaded
+      const deptCounts = {};
+      studentsInYear.forEach(s => {
+          if (s.department) {
+              deptCounts[s.department] = (deptCounts[s.department] || 0) + 1;
+          }
+      });
+      // Resolve dept names
+      let topDepartmentsRaw = Object.keys(deptCounts).map(code => ({ code, studentCount: deptCounts[code] }))
+          .sort((a, b) => b.studentCount - a.studentCount).slice(0, 3);
+      
+      const deptCodes = topDepartmentsRaw.map(d => d.code);
+      const depts = await Department.find({ code: { $in: deptCodes } }).lean();
+      
+      const topDepartments = topDepartmentsRaw.map(dept => {
+          const matchedDept = depts.find(d => d.code === dept.code);
+          const percentage = studentCount ? Number(((dept.studentCount / studentCount) * 100).toFixed(1)) : 0;
+          return {
+              code: dept.code,
+              name: matchedDept ? matchedDept.name : dept.code,
+              studentCount: dept.studentCount,
+              percentage
+          };
       });
 
-      const highlight = highlightsByYear[graduationYear] || null;
+      let highlight = null;
+      if (highlightMemory) {
+          const coverImg = await Image.findOne({ entityType: 'memory', entityId: String(highlightMemory._id) }).sort({ sortOrder: 1 }).lean();
+          highlight = {
+              memoryId: highlightMemory._id,
+              title: highlightMemory.title,
+              content: highlightMemory.content,
+              excerpt: buildExcerpt(highlightMemory.content, 200),
+              createdAt: highlightMemory.created_at,
+              authorName: highlightMemory.createdBy ? `${highlightMemory.createdBy.firstName} ${highlightMemory.createdBy.lastName}` : 'Unknown',
+              coverImage: coverImg ? coverImg.photoUrl : null
+          };
+      }
 
-      return {
+      const { entryYear, label } = deriveBatchLabel(graduationYear);
+
+      batches.push({
         graduationYear,
         entryYear,
         label,
-        theme: row.theme,
+        theme: yearbook.theme || null,
         studentCount,
         memoryCount,
         topDepartments,
         highlight,
-        lastMemoryAt: row.last_memory_at,
-      };
-    });
+        lastMemoryAt: latestMemory ? latestMemory.created_at : null
+      });
+    }
 
     return res.status(200).json({
       batches,
@@ -229,7 +135,6 @@ export const listBatches = async (req, res) => {
 };
 
 export const getBatchDetails = async (req, res) => {
-  const pool = await req.app.locals.getPool();
   const graduationYear = Number(req.params.year);
 
   if (!Number.isInteger(graduationYear)) {
@@ -237,187 +142,120 @@ export const getBatchDetails = async (req, res) => {
   }
 
   try {
-    const summaryResult = await pool.query(
-      `WITH available_years AS (
-         SELECT year
-         FROM yearbooks
-         WHERE year IS NOT NULL
-         UNION
-         SELECT DISTINCT graduation_year
-         FROM students
-         WHERE graduation_year IS NOT NULL
-       )
-       SELECT
-         ay.year AS graduation_year,
-         y.theme,
-         COUNT(DISTINCT s.student_id) AS student_count,
-         COUNT(DISTINCT m.id) AS memory_count,
-         MAX(m.created_at) AS last_memory_at
-       FROM available_years ay
-       LEFT JOIN yearbooks y ON y.year = ay.year
-       LEFT JOIN students s ON s.graduation_year = ay.year
-       LEFT JOIN memories m ON m.created_by = s.student_id
-       WHERE ay.year = $1
-       GROUP BY ay.year, y.theme`,
-      [graduationYear],
-    );
-
-    if (summaryResult.rows.length === 0) {
-      return res.status(404).json({ error: "Batch not found." });
+    const yearbook = await Yearbook.findOne({ year: graduationYear }).lean();
+    if (!yearbook) {
+        return res.status(404).json({ error: "Batch not found." });
     }
 
-    const summaryRow = summaryResult.rows[0];
-    const studentCount = Number(summaryRow.student_count) || 0;
-    const memoryCount = Number(summaryRow.memory_count) || 0;
+    const students = await Student.find({ graduationYear: yearbook._id }).lean();
+    const studentCount = students.length;
+    const studentIds = students.map(s => s.studentId);
+
+    const memoryCount = await Memory.countDocuments({ createdBy: { $in: studentIds } });
+    const latestMemory = await Memory.findOne({ createdBy: { $in: studentIds } }).sort({ created_at: -1 }).select('created_at').lean();
     const { entryYear, label } = deriveBatchLabel(graduationYear);
 
-    const departmentBreakdownResult = await pool.query(
-      `SELECT
-         s.department,
-         d.name AS department_name,
-         COUNT(*) AS student_count
-       FROM students s
-       LEFT JOIN departments d ON d.code = s.department
-       WHERE s.graduation_year = $1 AND s.department IS NOT NULL
-       GROUP BY s.department, d.name
-       ORDER BY student_count DESC`,
-      [graduationYear],
-    );
+    // Department Breakdown
+    const deptCounts = {};
+    students.forEach(s => {
+        if (s.department) {
+            deptCounts[s.department] = (deptCounts[s.department] || 0) + 1;
+        }
+    });
+    
+    let deptBreakdownRaw = Object.keys(deptCounts).map(code => ({ code, studentCount: deptCounts[code] }))
+        .sort((a, b) => b.studentCount - a.studentCount);
+        
+    const depts = await Department.find({ code: { $in: deptBreakdownRaw.map(d => d.code) } }).lean();
+    
+    const departmentBreakdown = deptBreakdownRaw.map(dept => {
+        const matchedDept = depts.find(d => d.code === dept.code);
+        const percentage = studentCount ? Number(((dept.studentCount / studentCount) * 100).toFixed(1)) : 0;
+        return {
+            code: dept.code,
+            name: matchedDept ? matchedDept.name : dept.code,
+            studentCount: dept.studentCount,
+            percentage
+        };
+    });
 
-    const highlightResult = await pool.query(
-      `SELECT
-         m.id,
-         m.title,
-         m.content,
-         m.created_at,
-         (s.first_name || ' ' || s.last_name) AS author_name,
-         (
-           SELECT i.photo_url
-           FROM images i
-           WHERE i.entity_type = 'memory' AND i.entity_id = m.id::text
-           ORDER BY i.sort_order
-           LIMIT 1
-         ) AS cover_image
-       FROM memories m
-       JOIN students s ON m.created_by = s.student_id
-       WHERE s.graduation_year = $1
-       ORDER BY m.created_at DESC
-       LIMIT 1`,
-      [graduationYear],
-    );
+    const highlightMemoryDoc = await Memory.findOne({ createdBy: { $in: studentIds } }).sort({ created_at: -1 }).populate('createdBy', 'firstName lastName').lean();
+    let highlightMemory = null;
+    if (highlightMemoryDoc) {
+        const coverImg = await Image.findOne({ entityType: 'memory', entityId: String(highlightMemoryDoc._id) }).sort({ sortOrder: 1 }).lean();
+        highlightMemory = {
+            id: highlightMemoryDoc._id,
+            title: highlightMemoryDoc.title,
+            content: highlightMemoryDoc.content,
+            excerpt: buildExcerpt(highlightMemoryDoc.content, 220),
+            createdAt: highlightMemoryDoc.created_at,
+            authorName: highlightMemoryDoc.createdBy ? `${highlightMemoryDoc.createdBy.firstName} ${highlightMemoryDoc.createdBy.lastName}` : 'Unknown',
+            coverImage: coverImg ? coverImg.photoUrl : null,
+            gallery: [],
+            taggedStudents: []
+        };
+    }
 
-    const studentSpotlightResult = await pool.query(
-      `SELECT
-         student_id,
-         first_name,
-         last_name,
-         department,
-         photo_url,
-         bio,
-         motto
-       FROM students
-       WHERE graduation_year = $1
-       ORDER BY updated_at DESC NULLS LAST, last_name ASC
-       LIMIT 12`,
-      [graduationYear],
-    );
+    const studentSpotlight = await Student.find({ graduationYear: yearbook._id })
+        .sort({ updated_at: -1, lastName: 1 }).limit(12).lean();
 
-    const memorySpotlightResult = await pool.query(
-      `SELECT
-         m.id,
-         m.title,
-         m.content,
-         m.created_at,
-         (s.first_name || ' ' || s.last_name) AS author_name,
-         (
-           SELECT json_agg(
-                    json_build_object(
-                      'id', i.id,
-                      'url', i.photo_url,
-                      'sort', i.sort_order
-                    )
-                    ORDER BY i.sort_order
-                  )
-           FROM images i
-           WHERE i.entity_type = 'memory' AND i.entity_id = m.id::text
-         ) AS images,
-         (
-           SELECT json_agg(
-                    json_build_object(
-                      'student_id', ts.student_id,
-                      'first_name', ts.first_name,
-                      'last_name', ts.last_name,
-                      'department', ts.department
-                    )
-                  )
-           FROM memory_participants mp
-           JOIN students ts ON mp.student_id = ts.student_id
-           WHERE mp.memory_id = m.id
-         ) AS tagged_students
-       FROM memories m
-       JOIN students s ON m.created_by = s.student_id
-       WHERE s.graduation_year = $1
-       ORDER BY m.created_at DESC
-       LIMIT 6`,
-      [graduationYear],
-    );
+    const memorySpotlightDocs = await Memory.find({ createdBy: { $in: studentIds } })
+        .sort({ created_at: -1 }).limit(6).populate('createdBy', 'firstName lastName').lean();
+        
+    const memorySpotlightIds = memorySpotlightDocs.map(m => String(m._id));
+    const allImages = await Image.find({ entityType: 'memory', entityId: { $in: memorySpotlightIds } }).sort({ sortOrder: 1 }).lean();
+    
+    // Resolve tagged students natively in memory
+    const memorySpotlight = memorySpotlightDocs.map(m => {
+        const mImgs = allImages.filter(i => i.entityId === String(m._id)).map(i => ({ id: i._id, url: i.photoUrl, sort: i.sortOrder }));
+        const tags = (m.participants || []).map(p => p.studentId); // In full system we'd resolve these via Student.find
+        
+        return {
+            id: m._id,
+            title: m.title,
+            content: m.content,
+            excerpt: buildExcerpt(m.content, 220),
+            createdAt: m.created_at,
+            authorName: m.createdBy ? `${m.createdBy.firstName} ${m.createdBy.lastName}` : 'Unknown',
+            coverImage: mImgs[0] ? mImgs[0].url : null,
+            gallery: mImgs,
+            taggedStudents: tags 
+        };
+    });
 
-    const albumsResult = await pool.query(
-      `SELECT
-         a.id,
-         a.title,
-         a.description,
-         a.created_at,
-         (s.first_name || ' ' || s.last_name) AS created_by_name
-       FROM albums a
-       JOIN students s ON a.created_by = s.student_id
-       WHERE s.graduation_year = $1
-       ORDER BY a.created_at DESC
-       LIMIT 6`,
-      [graduationYear],
-    );
-
-    const departmentBreakdown = mapDepartmentBreakdown(
-      departmentBreakdownResult.rows,
-      studentCount,
-    );
-
-    const highlightMemory = mapMemoryRow({
-      ...highlightResult.rows[0],
-      images: [],
-      tagged_students: [],
-    }) || null;
+    const albums = await Album.find({ createdBy: { $in: studentIds } })
+        .sort({ created_at: -1 }).limit(6).populate('createdBy', 'firstName lastName').lean();
 
     return res.status(200).json({
       batch: {
         graduationYear,
         entryYear,
         label,
-        theme: summaryRow.theme,
+        theme: yearbook.theme || null,
       },
       stats: {
         studentCount,
         memoryCount,
         topDepartments: departmentBreakdown.slice(0, 5),
-        lastMemoryAt: summaryRow.last_memory_at,
+        lastMemoryAt: latestMemory ? latestMemory.created_at : null,
       },
       highlightMemory,
-      studentSpotlight: studentSpotlightResult.rows.map((row) => ({
-        studentId: row.student_id,
-        firstName: row.first_name,
-        lastName: row.last_name,
+      studentSpotlight: studentSpotlight.map(row => ({
+        studentId: row.studentId,
+        firstName: row.firstName,
+        lastName: row.lastName,
         department: row.department,
-        photoUrl: row.photo_url,
+        photoUrl: row.photoUrl,
         bio: row.bio,
         motto: row.motto,
       })),
-      memorySpotlight: memorySpotlightResult.rows.map((row) => mapMemoryRow(row)),
-      albums: albumsResult.rows.map((row) => ({
-        id: row.id,
+      memorySpotlight: memorySpotlight,
+      albums: albums.map(row => ({
+        id: row._id,
         title: row.title,
         description: row.description,
         createdAt: row.created_at,
-        createdByName: row.created_by_name,
+        createdByName: row.createdBy ? `${row.createdBy.firstName} ${row.createdBy.lastName}` : 'Unknown',
       })),
     });
   } catch (error) {

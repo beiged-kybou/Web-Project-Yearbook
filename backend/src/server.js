@@ -2,7 +2,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import express from "express";
 import helmet from "helmet";
-import { getPool } from "./config/database.js";
+import { connectDB } from "./config/database.js";
 import { ensureClubSetup } from "./config/clubSetup.js";
 import authRoutes from "./routes/authRoutes.js";
 import dashboardRoutes from "./routes/dashboardRoutes.js";
@@ -25,7 +25,7 @@ app.use(helmet());
 app.use(cors());
 app.use(express.json());
 
-app.locals.getPool = getPool;
+
 
 app.use("/api/auth", authRoutes);
 app.use("/api/dashboard", dashboardRoutes);
@@ -44,8 +44,8 @@ app.use("/uploads", express.static("uploads"));
 
 const startServer = async () => {
   try {
-    const pool = await getPool();
-    await ensureClubSetup(pool);
+    await connectDB();
+    await ensureClubSetup();
     app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
     });
