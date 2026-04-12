@@ -24,6 +24,7 @@ This is a full-stack web application developed as a student project. It aims to 
 ### Admin & Moderation
 
 - **Yearbook Studio:** Tools for admins to manage yearbook releases, assign editors, & moderate submissions.
+- **Interactive Digital Yearbook:** A scrapbook-style digital yearbook with a flipbook viewer for published memories.
 - **Dashboard:** Centralized view for managing student registrations, batches, & system configurations.
 
 ## 🛠️ Tech Stack
@@ -92,7 +93,7 @@ cd frontend
 npm run dev
 ```
 
-The application will be available at `http://localhost:3000`.
+The application will be available at `http://localhost:5173` (Vite default).
 
 ## 📂 Project Structure
 
