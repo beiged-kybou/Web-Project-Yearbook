@@ -23,7 +23,7 @@ export const requestOtp = async (req, res) => {
         expiresAt: otp_expires_at,
         attempts: 0
       },
-      { upsert: true, new: true }
+      { upsert: true, new: true, returnDocument: 'after' }
     );
 
     await sendOtpMail(email, otp);

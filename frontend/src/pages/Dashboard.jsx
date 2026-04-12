@@ -20,7 +20,6 @@ const FILE_SIZE_LIMIT_BYTES = FILE_SIZE_LIMIT_MB * 1024 * 1024;
 const DEFAULT_UPLOAD_MESSAGE =
   "Stage up to 10 photos. Drag to reorder; the first becomes the cover.";
 const IMAGE_SOURCE_LABELS = {
-  existing: "Draft",
   file: "Upload",
   url: "Link",
 };
@@ -154,17 +153,11 @@ const Dashboard = () => {
     department: [],
     batch: [],
     public: [],
-    drafts: [],
   });
-  const [isDraft, setIsDraft] = useState(false);
   const [liveValidation, setLiveValidation] = useState({
     headline: "",
     caption: "",
   });
-  const [drafts, setDrafts] = useState([]);
-  const [draftLoading, setDraftLoading] = useState(false);
-  const [draftError, setDraftError] = useState("");
-  const [editingDraft, setEditingDraft] = useState(null);
 
   useEffect(() => {
     const token = localStorage.getItem("accessToken");
@@ -174,7 +167,6 @@ const Dashboard = () => {
     }
     fetchDashboard();
     fetchClubs();
-    fetchDrafts();
   }, []);
 
   const fetchDashboard = async () => {
@@ -220,10 +212,8 @@ const Dashboard = () => {
           department: [],
           batch: [],
           public: [],
-          drafts: [],
         },
       );
-      await fetchDrafts();
     } catch (err) {
       setProfileError(err.response?.data?.error || "Failed to load profile.");
     } finally {
@@ -253,12 +243,10 @@ const Dashboard = () => {
           department: [],
           batch: [],
           public: [],
-          drafts: [],
         },
       );
       setProfileSuccess("Profile updated successfully.");
       await fetchDashboard();
-      await fetchDrafts();
     } catch (err) {
       setProfileError(err.response?.data?.error || "Failed to update profile.");
     } finally {
@@ -320,54 +308,6 @@ const Dashboard = () => {
     setTagSuggestions([]);
   };
 
-  const fetchDrafts = async () => {
-    try {
-      setDraftError("");
-      setDraftLoading(true);
-      const response = await memoryService.listDrafts();
-      setDrafts(response.drafts || []);
-    } catch (err) {
-      setDraftError(err.response?.data?.error || "Failed to load drafts.");
-    } finally {
-      setDraftLoading(false);
-    }
-  };
-
-  const startEditingDraft = (draft) => {
-    if (!draft) return;
-    setEditingDraft(draft);
-    setHeadline(draft.title || "");
-    setCaption(draft.content || "");
-    setPostPrivacy(mapAlbumTypeToPrivacy(draft.album_type));
-    setIsDraft(true);
-    setShowPostModal(true);
-    setPostError("");
-    setPostSuccess("");
-    setLiveValidation({ headline: "", caption: "" });
-    setTagSearch("");
-    setSelectedTagStudents([]);
-    setTagSuggestions([]);
-    setSelectedClubCode("");
-    const draftImages = (draft.images || []).map((image, index) => ({
-      id: image.id,
-      url: image.url,
-      name: image.label || image.url,
-      label: truncateLabel(image.label || image.url),
-      source: "existing",
-      queueId: String(image.id),
-      order: index,
-    }));
-    setImageQueue(draftImages);
-    setRemovedImageIds(new Set());
-    setImageLayout(buildImageLayoutFromQueue(draftImages));
-    setUploadMessage(DEFAULT_UPLOAD_MESSAGE);
-    setUploadWarning("");
-    setImageUrlsInput("");
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
-  };
-
   const clearComposer = () => {
     setHeadline("");
     setCaption("");
@@ -385,9 +325,7 @@ const Dashboard = () => {
     setSelectedTagStudents([]);
     setTagSuggestions([]);
     setSelectedClubCode("");
-    setIsDraft(false);
     setLiveValidation({ headline: "", caption: "" });
-    setEditingDraft(null);
   };
 
   const mapAlbumTypeToPrivacy = (type) => {
@@ -401,9 +339,7 @@ const Dashboard = () => {
     setLiveValidation((prev) => {
       const next = { ...prev };
       if (field === "headline") {
-        if (isDraft && !value.trim()) {
-          next.headline = "";
-        } else if (value.trim().length < 6) {
+        if (value.trim().length < 6) {
           next.headline = "Headline needs at least 6 characters to submit.";
         } else if (value.trim().length > 120) {
           next.headline = "Headline must stay under 120 characters.";
@@ -412,9 +348,7 @@ const Dashboard = () => {
         }
       }
       if (field === "caption") {
-        if (isDraft && !value.trim()) {
-          next.caption = "";
-        } else if (value.trim().length < 20) {
+        if (value.trim().length < 20) {
           next.caption = "Caption needs at least 20 characters to submit.";
         } else if (value.trim().length > 1500) {
           next.caption = "Caption must stay under 1500 characters.";
@@ -448,20 +382,14 @@ const Dashboard = () => {
           item.source === "existing" && !removedImageIds.has(String(item.id)),
       )
       .map((item) => ({ id: item.id, url: item.url }));
-    if (!isDraft) {
-      if (!trimmedHeadline) {
-        setPostError("Headline is required.");
-        return;
-      }
 
-      if (!trimmedCaption) {
-        setPostError("Caption is required.");
-        return;
-      }
+    if (!trimmedHeadline) {
+      setPostError("Headline is required.");
+      return;
     }
 
-    if (!trimmedHeadline && !trimmedCaption && imageQueue.length === 0) {
-      setPostError("Draft must include at least text or an image.");
+    if (!trimmedCaption) {
+      setPostError("Caption is required.");
       return;
     }
 
@@ -471,57 +399,30 @@ const Dashboard = () => {
 
     try {
       setPostLoading(true);
-      let result;
-      if (editingDraft) {
-        result = await memoryService.updateDraft(editingDraft.id, {
-          action: isDraft ? "save" : "publish",
-          headline: trimmedHeadline,
-          caption: trimmedCaption,
-          imageUrls,
-          taggedStudentIds,
-          privacy: postPrivacy,
-          clubCode: postPrivacy === "club" ? selectedClubCode : undefined,
-          files: imageQueue
-            .filter((item) => item.source === "file")
-            .map((item) => item.file),
-          keptImages,
-          removedImageIds: Array.from(removedImageIds),
-          imageLayout,
-        });
-      } else {
-        result = await memoryService.createMemory({
-          headline: trimmedHeadline,
-          caption: trimmedCaption,
-          imageUrls,
-          files: imageQueue
-            .filter((item) => item.source === "file")
-            .map((item) => item.file),
-          taggedStudentIds,
-          privacy: postPrivacy,
-          clubCode: postPrivacy === "club" ? selectedClubCode : undefined,
-          keptImages,
-          removedImageIds: Array.from(removedImageIds),
-          imageLayout,
-          isDraft,
-        });
-      }
+      const result = await memoryService.createMemory({
+        headline: trimmedHeadline,
+        caption: trimmedCaption,
+        imageUrls,
+        files: imageQueue
+          .filter((item) => item.source === "file")
+          .map((item) => item.file),
+        taggedStudentIds,
+        privacy: postPrivacy,
+        clubCode: postPrivacy === "club" ? selectedClubCode : undefined,
+        keptImages,
+        removedImageIds: Array.from(removedImageIds),
+        imageLayout,
+      });
 
       const skipped = result.tagsSkipped?.length
         ? ` Some tags were skipped: ${result.tagsSkipped.join(", ")}.`
         : "";
 
-      const draftNote =
-        (result.memory?.status || result.status) === "draft"
-          ? " Draft saved."
-          : "";
-      setPostSuccess(
-        `${result.message || "Done."}${draftNote}${skipped}`.trim(),
-      );
+      setPostSuccess(`${result.message || "Done."}${skipped}`.trim());
       clearComposer();
       setActiveTab(postPrivacy === "club" ? "department" : postPrivacy);
       setShowPostModal(false);
       await fetchDashboard();
-      await fetchDrafts();
     } catch (err) {
       setPostError(err.response?.data?.error || "Failed to post memory.");
     } finally {
@@ -753,23 +654,6 @@ const Dashboard = () => {
               <div className="form-group">
                 <div className="privacy-row">
                   <label htmlFor="postPrivacy">Privacy</label>
-                  <label className="draft-toggle">
-                    <input
-                      type="checkbox"
-                      checked={isDraft}
-                      onChange={(event) => {
-                        const checked = event.target.checked;
-                        setIsDraft(checked);
-                        if (!checked) {
-                          validateField("headline", headline);
-                          validateField("caption", caption);
-                        }
-                      }}
-                    />
-                    <span>
-                      {editingDraft ? "Keep as draft" : "Save as draft"}
-                    </span>
-                  </label>
                 </div>
                 <select
                   id="postPrivacy"
@@ -825,39 +709,39 @@ const Dashboard = () => {
 
               <div className="form-group">
                 <label htmlFor="headline">Headline</label>
-                <input
-                  id="headline"
-                  type="text"
-                  value={headline}
-                  onChange={(event) => {
-                    const value = event.target.value;
-                    setHeadline(value);
-                    validateField("headline", value);
-                  }}
-                  placeholder="Write a short headline"
-                  required={!isDraft}
-                />
-                {liveValidation.headline && (
-                  <small className="composer-hint error-hint">
-                    {liveValidation.headline}
-                  </small>
-                )}
-              </div>
+                  <input
+                    id="headline"
+                    type="text"
+                    value={headline}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      setHeadline(value);
+                      validateField("headline", value);
+                    }}
+                    placeholder="Write a short headline"
+                    required
+                  />
+                  {liveValidation.headline && (
+                    <small className="composer-hint error-hint">
+                      {liveValidation.headline}
+                    </small>
+                  )}
+                </div>
 
-              <div className="form-group">
-                <label htmlFor="caption">Caption</label>
-                <textarea
-                  id="caption"
-                  value={caption}
-                  onChange={(event) => {
-                    const value = event.target.value;
-                    setCaption(value);
-                    validateField("caption", value);
-                  }}
-                  placeholder="Write your memory caption"
-                  rows={4}
-                  required={!isDraft}
-                />
+                <div className="form-group">
+                  <label htmlFor="caption">Caption</label>
+                  <textarea
+                    id="caption"
+                    value={caption}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      setCaption(value);
+                      validateField("caption", value);
+                    }}
+                    placeholder="Write your memory caption"
+                    rows={4}
+                    required
+                  />
                 {liveValidation.caption && (
                   <small className="composer-hint error-hint">
                     {liveValidation.caption}
@@ -1126,17 +1010,7 @@ const Dashboard = () => {
                   className="primary"
                   disabled={postLoading}
                 >
-                  {postLoading
-                    ? isDraft
-                      ? "Saving..."
-                      : "Publishing..."
-                    : editingDraft
-                      ? isDraft
-                        ? "Save Draft"
-                        : "Publish Draft"
-                      : isDraft
-                        ? "Save Draft"
-                        : "Publish Memory"}
+                  {postLoading ? "Publishing..." : "Publish Memory"}
                 </button>
               </div>
             </form>
@@ -1288,40 +1162,6 @@ const Dashboard = () => {
                     title="Public"
                     memories={myMemories.public || []}
                     formatDate={formatDate}
-                  />
-                  <DraftManager
-                    drafts={drafts}
-                    loading={draftLoading}
-                    error={draftError}
-                    onRefresh={fetchDrafts}
-                    onEdit={startEditingDraft}
-                    onDelete={async (draftId) => {
-                      try {
-                        await memoryService.updateDraft(draftId, {
-                          action: "delete",
-                        });
-                        await fetchDrafts();
-                      } catch (err) {
-                        setDraftError(
-                          err.response?.data?.error ||
-                            "Failed to delete draft.",
-                        );
-                      }
-                    }}
-                    onPublish={async (draftId) => {
-                      try {
-                        await memoryService.updateDraft(draftId, {
-                          action: "publish",
-                        });
-                        await fetchDrafts();
-                        await fetchDashboard();
-                      } catch (err) {
-                        setDraftError(
-                          err.response?.data?.error ||
-                            "Failed to publish draft.",
-                        );
-                      }
-                    }}
                   />
                 </div>
               </>
@@ -1530,310 +1370,5 @@ const Dashboard = () => {
     </div>
   );
 };
-
-const NotificationsPanel = ({
-  open,
-  onClose,
-  notifications,
-  loading,
-  error,
-  onRefresh,
-  onDecision,
-}) => {
-  if (!open) return null;
-  return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <section
-        className="scrapbook-page notifications-panel"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="modal-header">
-          <h3 className="composer-title">Notifications</h3>
-          <button type="button" className="modal-close" onClick={onClose}>
-            Close
-          </button>
-        </div>
-
-        <div className="notifications-toolbar">
-          <button
-            type="button"
-            className="refresh-clubs"
-            onClick={onRefresh}
-            disabled={loading}
-          >
-            {loading ? "Refreshing..." : "Refresh"}
-          </button>
-        </div>
-
-        {error && <div className="error-message">{error}</div>}
-
-        {loading ? (
-          <p className="loading-text">Loading notifications...</p>
-        ) : notifications.length === 0 ? (
-          <p className="empty-text">No notifications yet.</p>
-        ) : (
-          <div className="notifications-list">
-            {notifications.map((notification) => {
-              if (notification.notificationKind === "tag") {
-                return (
-                  <article
-                    key={`tag-${notification.id}`}
-                    className="notification-item"
-                  >
-                    <header>
-                      <h4>{notification.memory_title}</h4>
-                      <span className="notification-meta">
-                        Requested by{" "}
-                        {notification.requested_by_name || "Someone"}
-                      </span>
-                    </header>
-                    <p className="notification-caption">
-                      {notification.memory_content}
-                    </p>
-                    <footer>
-                      <button
-                        type="button"
-                        className="approve"
-                        onClick={() => onDecision(notification.id, "approved")}
-                        disabled={loading}
-                      >
-                        Approve
-                      </button>
-                      <button
-                        type="button"
-                        className="decline"
-                        onClick={() => onDecision(notification.id, "declined")}
-                        disabled={loading}
-                      >
-                        Decline
-                      </button>
-                    </footer>
-                  </article>
-                );
-              }
-
-              return (
-                <ActivityNotificationCard
-                  key={`activity-${notification.id}`}
-                  notification={notification}
-                />
-              );
-            })}
-          </div>
-        )}
-      </section>
-    </div>
-  );
-};
-
-const MemoryCard = ({ memory, formatDate }) => {
-  const tagged = memory.tagged_students || [];
-  const pending = memory.pending_tags || [];
-  const pillText =
-    memory.status === "draft"
-      ? "Draft"
-      : memory.status === "pending"
-        ? "Pending review"
-        : memory.status === "rejected"
-          ? "Needs edits"
-          : null;
-
-  return (
-    <div className={`memory-card ${pillText ? "memory-card--draft" : ""}`}>
-      {pillText && <span className="memory-status-pill">{pillText}</span>}
-      <div className="memory-content">
-        <h4 className="memory-title">{memory.title}</h4>
-        {memory.content && memory.content !== memory.title && (
-          <p className="memory-text">{memory.content}</p>
-        )}
-
-        {tagged.length > 0 && (
-          <div className="memory-tags">
-            {tagged.map((student) => (
-              <span key={student.student_id} className="memory-tag-chip">
-                {student.first_name} {student.last_name}
-              </span>
-            ))}
-          </div>
-        )}
-
-        {pending.length > 0 && (
-          <div className="memory-pending-tags">
-            <span className="pending-label">Awaiting approval:</span>
-            <div className="pending-tag-list">
-              {pending.map((student) => (
-                <span
-                  key={student.student_id}
-                  className="memory-tag-chip pending"
-                >
-                  {student.first_name} {student.last_name}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {memory.images && memory.images.length > 0 && (
-          <div className="memory-images">
-            {memory.images.map((img) => (
-              <div key={img.id} className="polaroid memory-image-wrap">
-                <img src={img.url} alt="" loading="lazy" />
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-      <div className="memory-footer">
-        <span className="meta-date">{formatDate(memory.created_at)}</span>
-      </div>
-    </div>
-  );
-};
-
-const PrivacyMemoryCollection = ({
-  title,
-  memories,
-  formatDate,
-  isDraft = false,
-}) => (
-  <section className="privacy-memory-group">
-    <div className="privacy-title-row">
-      <h5 className="privacy-memory-title">{title}</h5>
-      {isDraft && memories.length > 0 && (
-        <span className="privacy-memory-pill">Draft</span>
-      )}
-    </div>
-    {memories.length === 0 ? (
-      <p className="privacy-memory-empty">No memories in this group.</p>
-    ) : (
-      <div className="profile-memories-grid">
-        {memories.map((memory) => {
-          const tagged = memory.tagged_students || [];
-          const pending = memory.pending_tags || [];
-
-          return (
-            <div key={`${title}-${memory.id}`} className="profile-memory-card">
-              <h6 className="profile-memory-headline">{memory.title}</h6>
-              {memory.content && (
-                <p className="profile-memory-content">{memory.content}</p>
-              )}
-              {tagged.length > 0 && (
-                <div className="profile-memory-tags">
-                  {tagged.map((student) => (
-                    <span key={student.student_id} className="memory-tag-chip">
-                      {student.first_name} {student.last_name}
-                    </span>
-                  ))}
-                </div>
-              )}
-              {pending.length > 0 && (
-                <div className="profile-memory-pending">
-                  <span className="pending-label">Pending tags:</span>
-                  <div className="pending-tag-list">
-                    {pending.map((student) => (
-                      <span
-                        key={student.student_id}
-                        className="memory-tag-chip pending"
-                      >
-                        {student.first_name} {student.last_name}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {memory.images && memory.images.length > 0 && (
-                <div className="profile-memory-images">
-                  {memory.images.slice(0, 3).map((img) => (
-                    <img key={img.id} src={img.url} alt="" loading="lazy" />
-                  ))}
-                </div>
-              )}
-              <span className="profile-memory-date">
-                {formatDate(memory.created_at)}
-              </span>
-            </div>
-          );
-        })}
-      </div>
-    )}
-  </section>
-);
-
-const DraftManager = ({
-  drafts,
-  loading,
-  error,
-  onRefresh,
-  onEdit,
-  onDelete,
-  onPublish,
-}) => (
-  <section className="draft-manager">
-    <div className="draft-manager-header">
-      <h5>Drafts</h5>
-      <button
-        type="button"
-        className="ghost"
-        onClick={onRefresh}
-        disabled={loading}
-      >
-        {loading ? "Refreshing..." : "Refresh"}
-      </button>
-    </div>
-    {error && <div className="error-message">{error}</div>}
-    {loading ? (
-      <p className="loading-text">Loading drafts...</p>
-    ) : drafts.length === 0 ? (
-      <p className="privacy-memory-empty">
-        No drafts yet. Save one from the composer.
-      </p>
-    ) : (
-      <div className="draft-grid">
-        {drafts.map((draft) => (
-          <article key={draft.id} className="draft-card">
-            <header>
-              <div>
-                <h6>{draft.title || "Untitled draft"}</h6>
-                <span className="draft-updated">
-                  Updated{" "}
-                  {new Date(
-                    draft.updated_at || draft.created_at,
-                  ).toLocaleDateString("en-US")}
-                </span>
-              </div>
-              <span className="draft-privacy">{draft.album_type}</span>
-            </header>
-            <p className="draft-preview">
-              {draft.content || "No caption yet."}
-            </p>
-            <footer>
-              <button
-                type="button"
-                className="ghost"
-                onClick={() => onEdit(draft)}
-              >
-                Edit
-              </button>
-              <button
-                type="button"
-                className="primary"
-                onClick={() => onPublish(draft.id)}
-              >
-                Publish
-              </button>
-              <button
-                type="button"
-                className="danger"
-                onClick={() => onDelete(draft.id)}
-              >
-                Delete
-              </button>
-            </footer>
-          </article>
-        ))}
-      </div>
-    )}
-  </section>
-);
 
 export default Dashboard;

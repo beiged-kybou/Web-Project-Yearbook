@@ -19,8 +19,8 @@ const router = express.Router();
 
 router.post("/", authenticate, memoryUpload.array("images", 10), createMemory);
 router.post("/public", authenticate, memoryUpload.array("images", 10), createPublicMemory);
-router.get("/drafts", authenticate, listDrafts);
-router.put("/drafts/:draftId", authenticate, memoryUpload.array("images", 10), updateDraft);
+// router.get("/drafts", authenticate, listDrafts);
+// router.put("/drafts/:draftId", authenticate, memoryUpload.array("images", 10), updateDraft);
 router.get("/feed", authenticate, listFeed);
 router.post("/:memoryId/reactions", authenticate, upsertReaction);
 router.delete("/:memoryId/reactions", authenticate, deleteReaction);

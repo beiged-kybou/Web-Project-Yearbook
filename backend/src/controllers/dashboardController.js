@@ -4,6 +4,7 @@ import Album from "../models/Album.js";
 import Memory from "../models/Memory.js";
 import TagNotification from "../models/TagNotification.js";
 import Image from "../models/Image.js";
+import Yearbook from "../models/Yearbook.js";
 
 const fetchMemoriesWithExtras = async (query, limit = 20) => {
   const memories = await Memory.find(query)
@@ -53,8 +54,7 @@ export const getDashboard = async (req, res) => {
 
   try {
     const user = await User.findById(userId).populate({
-        path: 'studentId',
-        populate: { path: 'graduationYear' }
+        path: 'studentId'
     });
 
     if (!user) {
@@ -63,8 +63,8 @@ export const getDashboard = async (req, res) => {
 
     const student = user.studentId;
     const department = student?.department;
-    const gradYearObj = student?.graduationYear;
-    const graduation_year = gradYearObj ? gradYearObj.year : null;
+    
+    const graduation_year = student?.graduationYear;
 
     const batchYear = graduation_year ? graduation_year - 4 : null;
     const batch = batchYear ? String(batchYear).slice(-2) : null;
@@ -72,7 +72,7 @@ export const getDashboard = async (req, res) => {
     // Get arrays of student IDs for fast matching
     const [deptStudents, batchStudents] = await Promise.all([
       department ? Student.find({ department }).select('studentId').lean() : [],
-      gradYearObj ? Student.find({ graduationYear: gradYearObj._id }).select('studentId').lean() : []
+      graduation_year ? Student.find({ graduationYear: graduation_year }).select('studentId').lean() : []
     ]);
 
     const deptStudentIds = deptStudents.map(s => s.studentId);

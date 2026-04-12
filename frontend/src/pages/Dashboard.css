@@ -111,6 +111,7 @@ body::before {
   color: var(--tui-col-accent);
   font-weight: 600;
   letter-spacing: 0.08em;
+  white-space: nowrap;
 }
 
 .profile-trigger {
@@ -166,6 +167,7 @@ body::before {
   border: var(--tui-border);
   background: var(--tui-col-base);
   color: var(--tui-col-bright);
+  white-space: nowrap;
 }
 
 .post-btn {
@@ -582,6 +584,7 @@ body::before {
 .profile-modal {
   max-width: 780px;
   padding: 1.8rem;
+  overflow-y: auto;
 }
 
 .profile-photo-preview {
@@ -609,29 +612,6 @@ body::before {
   border-radius: 6px;
   padding: 0.8rem;
   background: var(--tui-col-base);
-}
-
-.draft-manager {
-  margin-top: 1.8rem;
-  border: var(--tui-border);
-  border-radius: 6px;
-  padding: 1rem;
-}
-
-.draft-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 0.8rem;
-}
-
-.draft-card {
-  border: var(--tui-border);
-  border-radius: 6px;
-  padding: 0.9rem;
-  background: var(--tui-col-base);
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
 }
 
 .empty-state {
@@ -675,8 +655,7 @@ body::before {
   .group-tabs,
   .albums-grid,
   .memories-grid,
-  .clubs-grid,
-  .draft-grid {
+  .clubs-grid {
     grid-template-columns: 1fr;
   }
 

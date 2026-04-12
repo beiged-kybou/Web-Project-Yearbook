@@ -16,6 +16,7 @@ import adminRoutes from "./routes/adminRoutes.js";
 import roleRoutes from "./routes/roleRoutes.js";
 import eventRoutes from "./routes/eventRoutes.js";
 import yearbookRoutes from "./routes/yearbookRoutes.js";
+import digitalYearbookRoutes from "./routes/digitalYearbookRoutes.js";
 
 dotenv.config();
 const app = express();
@@ -37,6 +38,7 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/roles", roleRoutes);
 app.use("/api/events", eventRoutes);
 app.use("/api/yearbooks", yearbookRoutes);
+app.use("/api/digital-yearbooks", digitalYearbookRoutes);
 
 app.use("/uploads", express.static("uploads"));
 

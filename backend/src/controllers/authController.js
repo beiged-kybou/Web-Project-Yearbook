@@ -39,7 +39,7 @@ export const requestOtp = async (req, res) => {
         expiresAt: otp_expires_at,
         attempts: 0
       },
-      { upsert: true, new: true }
+      { upsert: true, new: true, returnDocument: 'after' }
     );
 
     await sendOtpMail(email, otp);
@@ -170,7 +170,7 @@ export const completeRegistration = async (req, res) => {
     const yearbookObj = await Yearbook.findOneAndUpdate(
       { year: graduationYear },
       { $setOnInsert: { theme: null } },
-      { upsert: true, new: true }
+      { upsert: true, new: true, returnDocument: 'after' }
     );
 
     const studentRec = await Student.findOneAndUpdate(
@@ -179,12 +179,12 @@ export const completeRegistration = async (req, res) => {
          $set: {
             firstName: firstName, 
             lastName: lastName,
-            graduationYear: yearbookObj._id,
+            graduationYear: graduationYear,
             department
          },
          $setOnInsert: { email }
       },
-      { upsert: true, new: true }
+      { upsert: true, new: true, returnDocument: 'after' }
     );
 
     const newUser = await User.create({
@@ -234,8 +234,7 @@ export const login = async (req, res) => {
     }
 
     const user = await User.findOne({ email: new RegExp('^' + email + '$', 'i') }).populate({
-        path: 'studentId',
-        populate: { path: 'graduationYear' }
+        path: 'studentId'
     });
 
     if (!user) {
@@ -264,7 +263,7 @@ export const login = async (req, res) => {
       { expiresIn: "7d" }
     );
 
-    const gradYear = user.studentId?.graduationYear?.year;
+    const gradYear = user.studentId?.graduationYear;
     const batchYear = gradYear ? gradYear - 4 : null;
     const batch = batchYear ? String(batchYear).slice(-2) : null;
 

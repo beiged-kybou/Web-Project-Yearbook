@@ -33,7 +33,7 @@ export const ensureClubSetup = async () => {
     await Club.findOneAndUpdate(
       { code: club.code },
       { $set: { name: club.name, description: club.description } },
-      { upsert: true, new: true }
+      { upsert: true, new: true, returnDocument: 'after' }
     );
   }
 };

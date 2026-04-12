@@ -68,20 +68,20 @@ const findDuplicateIds = (ids = []) => {
   return Object.entries(counts).filter(([, count]) => count > 1).map(([id]) => id);
 };
 
-const buildValidationErrors = ({ headline, caption, isDraft }) => {
+const buildValidationErrors = ({ headline, caption }) => {
   const issues = [];
   if (!headline) {
-    if (!isDraft) issues.push("Headline is required.");
+    issues.push("Headline is required.");
   } else {
     if (headline.length > HEADLINE_LIMITS.max) issues.push(`Headline must be ${HEADLINE_LIMITS.max} characters or fewer.`);
-    if (!isDraft && headline.length < HEADLINE_LIMITS.min) issues.push(`Headline must be at least ${HEADLINE_LIMITS.min} characters.`);
+    if (headline.length < HEADLINE_LIMITS.min) issues.push(`Headline must be at least ${HEADLINE_LIMITS.min} characters.`);
   }
 
   if (!caption) {
-    if (!isDraft) issues.push("Caption is required.");
+    issues.push("Caption is required.");
   } else {
     if (caption.length > CAPTION_LIMITS.max) issues.push(`Caption must be ${CAPTION_LIMITS.max} characters or fewer.`);
-    if (!isDraft && caption.length < CAPTION_LIMITS.min) issues.push(`Caption must be at least ${CAPTION_LIMITS.min} characters.`);
+    if (caption.length < CAPTION_LIMITS.min) issues.push(`Caption must be at least ${CAPTION_LIMITS.min} characters.`);
   }
   return issues;
 };
@@ -127,10 +127,9 @@ export const createMemory = async (req, res) => {
   const imageUrls = sanitizeUrlArray(parseJsonArray(req.body.imageUrls));
   const layout = parseImageLayout(req.body.imageLayout);
   const taggedStudentIds = [...new Set(normalizeStringArray(req.body.taggedStudentIds))];
-  const isDraft = coerceBoolean(req.body.isDraft);
-  const validationIssues = buildValidationErrors({ headline, caption, isDraft });
+  const validationIssues = buildValidationErrors({ headline, caption });
 
-  if (!isDraft && validationIssues.length > 0) return res.status(400).json({ error: "Memory validation failed.", issues: validationIssues });
+  if (validationIssues.length > 0) return res.status(400).json({ error: "Memory validation failed.", issues: validationIssues });
   const allowedPrivacy = new Set([...Object.keys(PRIVACY_CONFIG), "club"]);
   if (!allowedPrivacy.has(privacy)) return res.status(400).json({ error: "Invalid privacy. Use department, batch, club, or public." });
 
@@ -175,7 +174,7 @@ export const createMemory = async (req, res) => {
       content: caption || null,
       createdBy: creatorStudentId,
       albumId: album._id,
-      status: isDraft ? "draft" : "pending"
+      status: "pending"
     });
 
     for (let index = 0; index < orderedImageUrls.length; index += 1) {
@@ -208,13 +207,13 @@ export const createMemory = async (req, res) => {
         await TagNotification.findOneAndUpdate(
             { memoryId: memory._id, taggedStudentId: taggedId },
             { requestedByStudentId: creatorStudentId, status: 'pending', note: null },
-            { upsert: true }
+            { upsert: true, new: true, returnDocument: 'after' }
         );
       }
     }
 
     res.status(201).json({
-      message: isDraft ? "Memory saved as draft." : "Memory submitted for review.",
+      message: "Memory submitted for review.",
       memory: { id: memory._id, title: memory.title, content: memory.content },
       privacy,
       imagesAdded: orderedImageUrls.length,
