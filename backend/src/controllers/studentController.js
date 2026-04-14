@@ -147,6 +147,7 @@ export async function getStudentByName(req, res) {
 
     const mapped = students.map(s => ({
         ...s,
+        id: s.studentId, // Ensure frontend compatibility
         full_name: `${s.firstName} ${s.lastName}`.toLowerCase()
     })).sort((a, b) => a.full_name.localeCompare(b.full_name));
 

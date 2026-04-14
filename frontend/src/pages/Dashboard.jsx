@@ -296,15 +296,16 @@ const Dashboard = () => {
       setTagSearchLoading(true);
       const result = await studentService.searchStudents(query);
 
-      const alreadySelected = new Set(
-        selectedTagStudents.map((student) => student.student_id),
-      );
+    const alreadySelected = new Set(
+      selectedTagStudents.map((student) => student.studentId),
+    );
+
       const currentStudentId = data?.user?.studentId || "";
       const filtered = (result.students || [])
         .filter(
-          (student) => String(student.student_id) !== String(currentStudentId),
+          (student) => String(student.studentId) !== String(currentStudentId),
         )
-        .filter((student) => !alreadySelected.has(student.student_id))
+        .filter((student) => !alreadySelected.has(student.studentId))
         .filter((student) => isStudentAllowedForPrivacy(student))
         .slice(0, 8);
 
@@ -430,7 +431,7 @@ const Dashboard = () => {
 
   const removeTagStudent = (studentId) => {
     setSelectedTagStudents((prev) =>
-      prev.filter((student) => student.student_id !== studentId),
+      prev.filter((student) => student.studentId !== studentId),
     );
   };
 
@@ -468,7 +469,7 @@ const Dashboard = () => {
     }
 
     const taggedStudentIds = selectedTagStudents.map(
-      (student) => student.student_id,
+      (student) => student.studentId,
     );
 
     try {
@@ -618,11 +619,11 @@ const Dashboard = () => {
 
   const formatDate = (dateStr) => {
     if (!dateStr) return "";
-    return new Date(dateStr).toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
+    const date = new Date(dateStr);
+    const d = String(date.getDate()).padStart(2, '0');
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const y = date.getFullYear();
+    return `${d}/${m}/${y}`;
   };
 
   if (loading) {
@@ -719,7 +720,11 @@ const Dashboard = () => {
             </button>
             <button
               className="post-btn"
-              style={{ borderColor: 'var(--tui-col-attn)', color: 'var(--tui-col-attn)', background: 'rgba(250, 179, 135, 0.15)' }}
+              style={{
+                borderColor: "var(--tui-col-attn)",
+                color: "var(--tui-col-attn)",
+                background: "rgba(250, 179, 135, 0.15)",
+              }}
               onClick={() => setShowYearbookModal(true)}
             >
               CREATE YEARBOOK
@@ -762,23 +767,6 @@ const Dashboard = () => {
               <div className="form-group">
                 <div className="privacy-row">
                   <label htmlFor="postPrivacy">Privacy</label>
-                  <label className="draft-toggle">
-                    <input
-                      type="checkbox"
-                      checked={isDraft}
-                      onChange={(event) => {
-                        const checked = event.target.checked;
-                        setIsDraft(checked);
-                        if (!checked) {
-                          validateField("headline", headline);
-                          validateField("caption", caption);
-                        }
-                      }}
-                    />
-                    <span>
-                      {editingDraft ? "Keep as draft" : "Save as draft"}
-                    </span>
-                  </label>
                 </div>
                 <select
                   id="postPrivacy"
@@ -1060,12 +1048,12 @@ const Dashboard = () => {
                     {selectedTagStudents.map((student) => (
                       <button
                         type="button"
-                        key={student.student_id}
+                        key={student.studentId}
                         className="selected-tag-chip"
-                        onClick={() => removeTagStudent(student.student_id)}
+                        onClick={() => removeTagStudent(student.studentId)}
                       >
-                        {student.first_name} {student.last_name} (
-                        {student.student_id})
+                        {student.firstName} {student.lastName} (
+                        {student.studentId})
                         <span className="chip-remove">x</span>
                       </button>
                     ))}
@@ -1093,18 +1081,19 @@ const Dashboard = () => {
                       tagSuggestions.map((student) => (
                         <button
                           type="button"
-                          key={student.student_id}
+                          key={student.studentId}
                           className="tag-suggestion-item"
                           onClick={() => addTagStudent(student)}
                         >
                           <span className="suggestion-name">
-                            {student.first_name} {student.last_name}
+                            {student.firstName} {student.lastName}
                           </span>
                           <span className="suggestion-meta">
-                            {student.student_id} - {student.department}
+                            {student.studentId}
                           </span>
                         </button>
                       ))}
+
                   </div>
                 )}
 
@@ -1163,8 +1152,8 @@ const Dashboard = () => {
       )}
 
       {showYearbookModal && (
-        <YearbookCreator 
-          onClose={() => setShowYearbookModal(false)} 
+        <YearbookCreator
+          onClose={() => setShowYearbookModal(false)}
           onSuccess={(releaseId) => {
             setShowYearbookModal(false);
             navigate(`/yearbook/${releaseId}`);
@@ -1641,9 +1630,7 @@ const DraftManager = ({
                 <h6>{draft.title || "Untitled draft"}</h6>
                 <span className="draft-updated">
                   Updated{" "}
-                  {new Date(
-                    draft.updated_at || draft.created_at,
-                  ).toLocaleDateString("en-US")}
+                  {formatDate(draft.updated_at || draft.created_at)}
                 </span>
               </div>
               <span className="draft-privacy">{draft.album_type}</span>

@@ -73,9 +73,12 @@ export const actOnTagNotification = async (req, res) => {
         notification.memoryId,
         { $addToSet: { participants: { studentId } } } // $addToSet prevents duplicates
       );
+      
+      // Update notification status
+      notification.status = "approved";
+    } else {
+      notification.status = "declined";
     }
-
-    notification.status = decision;
     notification.actedAt = new Date();
     notification.actedByStudentId = studentId;
     notification.note = note;

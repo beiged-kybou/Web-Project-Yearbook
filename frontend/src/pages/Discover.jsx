@@ -8,19 +8,20 @@ const DEFAULT_REACTIONS = ['love', 'wow', 'support']
 const formatDate = (value) => {
   if (!value) return ''
   try {
-    return new Date(value).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    })
+    const date = new Date(value);
+    const d = String(date.getDate()).padStart(2, '0');
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const y = date.getFullYear();
+    return `${d}/${m}/${y}`;
   } catch {
     return value
   }
 }
 
-const MemoryCard = ({ memory, onReact, onRemoveReaction, onOpenComments }) => {
+const MemoryCard = ({ memory, viewer, onReact, onRemoveReaction, onOpenComments, onDelete }) => {
   const reactionCounts = memory.reactions?.counts || {}
   const viewerReaction = memory.reactions?.viewer || null
+  const isOwner = viewer?.studentId === memory.creator?.studentId
 
   return (
     <article className="memory-card">
@@ -33,10 +34,34 @@ const MemoryCard = ({ memory, onReact, onRemoveReaction, onOpenComments }) => {
           )}
         </div>
         <div className="memory-card__meta">
-          <span className="memory-card__name">{memory.creator?.displayName || 'Anonymous'}</span>
+          <span className="memory-card__name">{memory.creator?.firstName} {memory.creator?.lastName}</span>
           <span className="memory-card__timestamp">{formatDate(memory.createdAt)}</span>
         </div>
-        <span className="memory-card__badge">{memory.albumType === 'club' ? 'Club' : memory.albumType}</span>
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          {isOwner && (
+            <button 
+              type="button" 
+              className="memory-card__delete-btn"
+              onClick={() => {
+                if (window.confirm('Are you sure you want to delete this memory?')) {
+                  onDelete(memory.id)
+                }
+              }}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: '#ff4d4f',
+                cursor: 'pointer',
+                fontSize: '0.8rem',
+                padding: '4px 8px',
+                borderRadius: '4px',
+              }}
+            >
+              Delete
+            </button>
+          )}
+          <span className="memory-card__badge">{memory.albumType === 'club' ? 'Club' : memory.albumType}</span>
+        </div>
       </header>
 
       <h3 className="memory-card__title">{memory.title}</h3>
@@ -266,6 +291,15 @@ const Discover = () => {
     }
   }
 
+  const handleDeleteMemory = async (memoryId) => {
+    try {
+      await memoryService.deleteMemory(memoryId)
+      setMemories((prev) => prev.filter((m) => m.id !== memoryId))
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to delete memory')
+    }
+  }
+
   const greeting = useMemo(() => {
     if (!viewer?.department) return 'Discover memories'
     return `Discover ${viewer.department} & Batch ${viewer.graduationYear || ''}`
@@ -303,9 +337,11 @@ const Discover = () => {
             <MemoryCard
               key={memory.id}
               memory={memory}
+              viewer={viewer}
               onReact={handleReact}
               onRemoveReaction={handleRemoveReaction}
               onOpenComments={setCommentsMemory}
+              onDelete={handleDeleteMemory}
             />
           ))
         )}

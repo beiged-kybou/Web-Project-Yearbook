@@ -17,12 +17,15 @@ const RELEASE_STATUSES = new Set(["draft", "collecting", "final", "published"]);
 
 const uploadBufferToCloudinary = (buffer, folder = "iut-yearbook/yearbooks") =>
   new Promise((resolve, reject) => {
-    const stream = cloudinary.v2.uploader.upload_stream(
+    const stream = cloudinary.uploader.upload_stream(
       { folder, resource_type: "image" },
       (error, result) => {
-        if (error) { reject(error); return; }
+        if (error) {
+          reject(error);
+          return;
+        }
         resolve(result);
-      }
+      },
     );
     stream.end(buffer);
   });
@@ -401,7 +404,10 @@ export const getPublishedRelease = async (req, res) => {
   const { releaseId } = req.params;
 
   try {
-    const release = await YearbookRelease.findOne({ _id: releaseId, status: 'published' }).lean();
+    const release = await YearbookRelease.findOne({ 
+      _id: releaseId, 
+      status: { $in: ['published', 'personal'] } 
+    }).lean();
     if (!release) return res.status(404).json({ error: "Published release not found" });
 
     const pagesResult = await YearbookPage.find({ releaseId }).sort({ pageNumber: 1 }).lean();
@@ -447,8 +453,16 @@ export const previewPersonalYearbook = async (req, res) => {
     // Apply Time filter
     if (startDate || endDate) {
       query.created_at = {};
-      if (startDate) query.created_at.$gte = new Date(startDate);
-      if (endDate) query.created_at.$lte = new Date(endDate);
+      if (startDate) {
+        const start = new Date(startDate);
+        start.setHours(0, 0, 0, 0);
+        query.created_at.$gte = start;
+      }
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        query.created_at.$lte = end;
+      }
     }
 
     // Apply Privacy filter
@@ -465,7 +479,9 @@ export const previewPersonalYearbook = async (req, res) => {
       const album = await Album.findOne({ type: 'club', title: `${club.name} Club Memories` });
       if (album) query.albumId = album._id;
     } else if (privacy === 'public') {
-      query.albumId = { $exists: true }; // Generic check, could be more specific
+      // For public, we should also check for memories that aren't tied to a specific department/batch album if needed,
+      // but usually public feed just shows everything approved.
+      // query.albumId = { $exists: true }; 
     }
 
     const memories = await Memory.find(query)
@@ -498,7 +514,15 @@ export const previewPersonalYearbook = async (req, res) => {
 };
 
 export const createPersonalYearbook = async (req, res) => {
-  const { title, privacy, clubCode, startDate, endDate, memoryIds } = req.body;
+  let { title, privacy, clubCode, startDate, endDate, memoryIds } = req.body;
+
+  if (typeof memoryIds === "string") {
+    try {
+      memoryIds = JSON.parse(memoryIds);
+    } catch (e) {
+      console.error("Failed to parse memoryIds:", memoryIds);
+    }
+  }
 
   if (!title?.trim()) return res.status(400).json({ error: "Title is required" });
   if (!memoryIds || !Array.isArray(memoryIds) || memoryIds.length === 0) {
@@ -518,7 +542,7 @@ export const createPersonalYearbook = async (req, res) => {
       year: new Date().getFullYear(),
       theme: "Personal",
       coverPhotoUrl,
-      status: 'published', // Personal yearbooks are "published" by default for sharing
+      status: 'personal', // Use valid enum value 'personal' instead of 'published'
       privacy,
       clubCode,
       startDate: startDate ? new Date(startDate) : null,
@@ -568,7 +592,7 @@ export const createPersonalYearbook = async (req, res) => {
     res.status(201).json({ releaseId: release._id, message: "Personal yearbook created!" });
   } catch (error) {
     console.error("Create Personal Yearbook Error:", error);
-    res.status(500).json({ error: "Failed to create personal yearbook." });
+    res.status(500).json({ error: "Failed to create personal yearbook.", details: error.message, stack: error.stack });
   }
 };
 

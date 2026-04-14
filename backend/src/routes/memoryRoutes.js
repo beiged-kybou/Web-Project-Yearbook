@@ -11,6 +11,7 @@ import {
   addComment,
   updateComment,
   deleteComment,
+  deleteMemory,
   listClubMemories,
 } from "../controllers/memoryController.js";
 import { authenticate } from "../middleware/auth.js";
@@ -30,5 +31,6 @@ router.get("/:memoryId/comments", authenticate, listComments);
 router.post("/:memoryId/comments", authenticate, addComment);
 router.put("/:memoryId/comments/:commentId", authenticate, updateComment);
 router.delete("/:memoryId/comments/:commentId", authenticate, deleteComment);
+router.delete("/:memoryId", authenticate, deleteMemory);
 
 export default router;

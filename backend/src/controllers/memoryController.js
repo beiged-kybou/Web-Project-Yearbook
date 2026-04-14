@@ -14,8 +14,9 @@ const PRIVACY_CONFIG = {
   public: { albumType: "group", title: "Public Memories", description: null }
 };
 
-const HEADLINE_LIMITS = { min: 6, max: 120 };
-const CAPTION_LIMITS = { min: 20, max: 1500 };
+  const HEADLINE_LIMITS = { min: 1, max: 120 };
+const CAPTION_LIMITS = { min: 1, max: 1500 };
+
 
 const normalizeStringArray = (value) => {
   if (Array.isArray(value)) return value.filter(i => typeof i === "string").map(i => i.trim()).filter(Boolean);
@@ -178,7 +179,11 @@ export const createMemory = async (req, res) => {
   const taggedStudentIds = [...new Set(normalizeStringArray(req.body.taggedStudentIds))];
   const validationIssues = buildValidationErrors({ headline, caption });
 
-  if (validationIssues.length > 0) return res.status(400).json({ error: "Memory validation failed.", issues: validationIssues });
+  if (validationIssues.length > 0) {
+    const errorMsg = `Memory validation failed: ${validationIssues.join(" ")}`;
+    console.warn("[Validation Failure]", validationIssues);
+    return res.status(400).json({ error: errorMsg, issues: validationIssues });
+  }
   const allowedPrivacy = new Set([...Object.keys(PRIVACY_CONFIG), "club"]);
   if (!allowedPrivacy.has(privacy)) return res.status(400).json({ error: "Invalid privacy. Use department, batch, club, or public." });
 
@@ -218,13 +223,14 @@ export const createMemory = async (req, res) => {
     const buckets = { existing: existingImages.map(i => i.url), url: imageUrls, file: uploadedImageUrls };
     const orderedImageUrls = buildImagesFromLayout(layout, buckets);
 
-    const memory = await Memory.create({
+      const memory = await Memory.create({
       title: headline || null,
       content: caption || null,
       createdBy: creatorStudentId,
       albumId: album._id,
-      status: "pending"
+      status: "approved"
     });
+
 
     for (let index = 0; index < orderedImageUrls.length; index += 1) {
       await Image.create({ entityType: 'memory', entityId: memory._id, photoUrl: orderedImageUrls[index], sortOrder: index });
@@ -276,10 +282,12 @@ export const createMemory = async (req, res) => {
       clubCode: clubContext?.code || null,
       issues: validationIssues
     });
-  } catch (error) {
-    res.status(500).json({ error: "Failed to create memory." });
+    } catch (error) {
+    console.error("Create Memory Error:", error);
+    res.status(500).json({ error: "Failed to create memory.", details: error.message });
   }
 };
+
 
 export const createPublicMemory = (req, res) => {
   req.body = { ...req.body, privacy: "public" };
@@ -391,6 +399,10 @@ export const listFeed = async (req, res) => {
             student: { student_id: c.studentId }
         })) || [];
 
+        // Only show participants (tags) that are in the participants array
+        // (which means they have approved the tag notification)
+        const approvedTags = (m.participants || []).map(p => p.studentId);
+
         return {
             id: m._id,
             title: m.title,
@@ -403,7 +415,8 @@ export const listFeed = async (req, res) => {
             images: memImages,
             reactions: { counts, viewer: viewerReaction?.type || null },
             commentsPreview,
-            commentCount: m.comments?.length || 0
+            commentCount: m.comments?.length || 0,
+            tagged_students: approvedTags
         };
     });
 
@@ -542,4 +555,40 @@ export const deleteComment = async (req, res) => {
     } catch (error) {
         res.status(500).json({ error: "Failed to delete comment." });
     }
+};
+
+export const deleteMemory = async (req, res) => {
+  const { memoryId } = req.params;
+  const { userId } = req.user;
+
+  try {
+    const user = await User.findById(userId).populate("studentId").lean();
+    if (!user || !user.studentId) {
+      return res.status(400).json({ error: "Complete your profile first." });
+    }
+
+    const memory = await Memory.findById(memoryId);
+    if (!memory) {
+      return res.status(404).json({ error: "Memory not found." });
+    }
+
+    // Authorization: Only the creator or an admin can delete
+    if (memory.createdBy !== user.studentId.studentId && req.user.role !== "admin") {
+      return res.status(403).json({ error: "Unauthorized to delete this memory." });
+    }
+
+    // Delete associated images
+    await Image.deleteMany({ entityType: "memory", entityId: memoryId });
+
+    // Delete associated tag notifications
+    await TagNotification.deleteMany({ memoryId: memoryId });
+
+    // Delete the memory itself
+    await Memory.findByIdAndDelete(memoryId);
+
+    res.json({ message: "Memory deleted successfully." });
+  } catch (error) {
+    console.error("Delete Memory Error:", error);
+    res.status(500).json({ error: "Failed to delete memory." });
+  }
 };

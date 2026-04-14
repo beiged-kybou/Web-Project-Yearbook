@@ -37,6 +37,15 @@ const AdminDashboard = () => {
     loadReleases();
   }, []);
 
+  const formatDate = (dateStr) => {
+    if (!dateStr) return "";
+    const date = new Date(dateStr);
+    const d = String(date.getDate()).padStart(2, '0');
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const y = date.getFullYear();
+    return `${d}/${m}/${y}`;
+  };
+
   const loadDashboard = async () => {
     try {
       setLoading(true);
@@ -286,7 +295,7 @@ const AdminDashboard = () => {
                             {release.status}
                           </span>
                         </td>
-                        <td>{new Date(release.updated_at || release.created_at).toLocaleDateString()}</td>
+                        <td>{formatDate(release.updated_at || release.created_at)}</td>
                         <td>
                           <div className="release-actions">
                             <select
@@ -409,7 +418,7 @@ const AdminDashboard = () => {
                   <tr key={student.student_id}>
                     <td>{student.first_name} {student.last_name}</td>
                     <td>{student.department}</td>
-                    <td>{new Date(student.updated_at).toLocaleString()}</td>
+                    <td>{formatDate(student.updated_at)}</td>
                   </tr>
                 ))}
               </tbody>

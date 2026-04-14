@@ -204,12 +204,20 @@ export const memoryService = {
   },
   deleteComment: async (memoryId, commentId) => {
     const token = localStorage.getItem('accessToken');
-    const response = await api.delete(`/memories/${memoryId}/comments/${commentId}`, {
+        const response = await api.delete(`/memories/${memoryId}/comments/${commentId}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     return response.data;
   },
-  createMemory: async ({ headline, caption, imageUrls, taggedStudentIds, privacy, clubCode, files = [], keptImages = [], removedImageIds = [], imageLayout = [], isDraft = false }) => {
+  deleteMemory: async (memoryId) => {
+    const token = localStorage.getItem("accessToken");
+    const response = await api.delete(`/memories/${memoryId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
+  createMemory: async ({
+ headline, caption, imageUrls, taggedStudentIds, privacy, clubCode, files = [], keptImages = [], removedImageIds = [], imageLayout = [], isDraft = false }) => {
     const token = localStorage.getItem('accessToken');
 
     const formData = new FormData();

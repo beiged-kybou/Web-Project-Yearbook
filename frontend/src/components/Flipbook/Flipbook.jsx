@@ -5,6 +5,15 @@ import styles from './Flipbook.module.css';
 const Page = React.forwardRef(({ memory }, ref) => {
   if (!memory) return null;
 
+  const formatDate = (dateStr) => {
+    if (!dateStr) return "";
+    const date = new Date(dateStr);
+    const d = String(date.getDate()).padStart(2, '0');
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const y = date.getFullYear();
+    return `${d}/${m}/${y}`;
+  };
+
   return (
     <div className={styles.page} ref={ref}>
       <div className={styles.pageContent}>
@@ -24,7 +33,7 @@ const Page = React.forwardRef(({ memory }, ref) => {
         <p className={styles.caption}>{memory.content}</p>
         
         <div className={styles.footer}>
-          <span>{new Date(memory.created_at).toLocaleDateString()}</span>
+          <span>{formatDate(memory.created_at)}</span>
         </div>
       </div>
     </div>
