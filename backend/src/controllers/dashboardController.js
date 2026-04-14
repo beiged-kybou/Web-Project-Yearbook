@@ -7,18 +7,36 @@ import Image from "../models/Image.js";
 import Yearbook from "../models/Yearbook.js";
 
 const fetchMemoriesWithExtras = async (query, limit = 20) => {
-  const memories = await Memory.find(query)
+    const memories = await Memory.find(query)
     .sort({ created_at: -1 })
     .limit(limit)
-    .populate('createdBy', 'firstName lastName studentId')
-    .populate('participants.studentId', 'studentId firstName lastName department graduationYear photoUrl')
+    .populate({
+      path: 'createdBy',
+      model: 'Student',
+      localField: 'createdBy',
+      foreignField: 'studentId',
+      select: 'firstName lastName studentId'
+    })
+    .populate({
+      path: 'participants.studentId',
+      model: 'Student',
+      localField: 'participants.studentId',
+      foreignField: 'studentId',
+      select: 'studentId firstName lastName department graduationYear photoUrl'
+    })
     .lean();
 
   const memoryIds = memories.map(m => m._id);
 
   const imagesPromise = Image.find({ entityType: 'memory', entityId: { $in: memoryIds.map(String) } }).sort({ sortOrder: 1 });
-  const pendingTagsPromise = TagNotification.find({ memoryId: { $in: memoryIds }, status: 'pending' })
-    .populate('taggedStudentId', 'studentId firstName lastName department graduationYear photoUrl');
+    const pendingTagsPromise = TagNotification.find({ memoryId: { $in: memoryIds }, status: 'pending' })
+    .populate({
+      path: 'taggedStudentId',
+      model: 'Student',
+      localField: 'taggedStudentId',
+      foreignField: 'studentId',
+      select: 'studentId firstName lastName department graduationYear photoUrl'
+    });
     
   const [images, pendingTags] = await Promise.all([imagesPromise, pendingTagsPromise]);
 
@@ -54,7 +72,10 @@ export const getDashboard = async (req, res) => {
 
   try {
     const user = await User.findById(userId).populate({
-        path: 'studentId'
+        path: 'studentId',
+        model: 'Student',
+        localField: 'studentId',
+        foreignField: 'studentId'
     });
 
     if (!user) {
@@ -80,9 +101,27 @@ export const getDashboard = async (req, res) => {
 
     // Fetch Albums
     const [deptAlbums, batchAlbums, publicAlbums] = await Promise.all([
-      Album.find({ type: 'department', createdBy: { $in: deptStudentIds } }).sort({ created_at: -1 }).limit(20).populate('createdBy', 'firstName lastName studentId').lean(),
-      Album.find({ type: 'batch', createdBy: { $in: batchStudentIds } }).sort({ created_at: -1 }).limit(20).populate('createdBy', 'firstName lastName studentId').lean(),
-      Album.find({ type: 'group' }).sort({ created_at: -1 }).limit(20).populate('createdBy', 'firstName lastName studentId').lean(),
+      Album.find({ type: 'department', createdBy: { $in: deptStudentIds } }).sort({ created_at: -1 }).limit(20).populate({
+        path: 'createdBy',
+        model: 'Student',
+        localField: 'createdBy',
+        foreignField: 'studentId',
+        select: 'firstName lastName studentId'
+      }).lean(),
+      Album.find({ type: 'batch', createdBy: { $in: batchStudentIds } }).sort({ created_at: -1 }).limit(20).populate({
+        path: 'createdBy',
+        model: 'Student',
+        localField: 'createdBy',
+        foreignField: 'studentId',
+        select: 'firstName lastName studentId'
+      }).lean(),
+      Album.find({ type: 'group' }).sort({ created_at: -1 }).limit(20).populate({
+        path: 'createdBy',
+        model: 'Student',
+        localField: 'createdBy',
+        foreignField: 'studentId',
+        select: 'firstName lastName studentId'
+      }).lean(),
     ]);
 
     const formatAlbum = (a) => ({

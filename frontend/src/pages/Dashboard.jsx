@@ -1371,4 +1371,232 @@ const Dashboard = () => {
   );
 };
 
+const NotificationsPanel = ({
+  open,
+  onClose,
+  notifications,
+  loading,
+  error,
+  onRefresh,
+  onDecision,
+}) => {
+  if (!open) return null;
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <section
+        className="scrapbook-page notifications-panel"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="modal-header">
+          <h3 className="composer-title">Notifications</h3>
+          <button type="button" className="modal-close" onClick={onClose}>
+            Close
+          </button>
+        </div>
+
+        <div className="notifications-toolbar">
+          <button
+            type="button"
+            className="refresh-clubs"
+            onClick={onRefresh}
+            disabled={loading}
+          >
+            {loading ? "Refreshing..." : "Refresh"}
+          </button>
+        </div>
+
+        {error && <div className="error-message">{error}</div>}
+
+        {loading ? (
+          <p className="loading-text">Loading notifications...</p>
+        ) : notifications.length === 0 ? (
+          <p className="empty-text">No notifications yet.</p>
+        ) : (
+          <div className="notifications-list">
+            {notifications.map((notification) => {
+              if (notification.notificationKind === "tag") {
+                return (
+                  <article
+                    key={`tag-${notification.id}`}
+                    className="notification-item"
+                  >
+                    <header>
+                      <h4>{notification.memory_title}</h4>
+                      <span className="notification-meta">
+                        Requested by{" "}
+                        {notification.requested_by_name || "Someone"}
+                      </span>
+                    </header>
+                    <p className="notification-caption">
+                      {notification.memory_content}
+                    </p>
+                    <footer>
+                      <button
+                        type="button"
+                        className="approve"
+                        onClick={() => onDecision(notification.id, "approved")}
+                        disabled={loading}
+                      >
+                        Approve
+                      </button>
+                      <button
+                        type="button"
+                        className="decline"
+                        onClick={() => onDecision(notification.id, "declined")}
+                        disabled={loading}
+                      >
+                        Decline
+                      </button>
+                    </footer>
+                  </article>
+                );
+              }
+
+              return (
+                <ActivityNotificationCard
+                  key={`activity-${notification.id}`}
+                  notification={notification}
+                />
+              );
+            })}
+          </div>
+        )}
+      </section>
+    </div>
+  );
+};
+
+const MemoryCard = ({ memory, formatDate }) => {
+  const tagged = memory.tagged_students || [];
+  const pending = memory.pending_tags || [];
+  const pillText =
+    memory.status === "draft"
+      ? "Draft"
+      : memory.status === "pending"
+        ? "Pending review"
+        : memory.status === "rejected"
+          ? "Needs edits"
+          : null;
+
+  return (
+    <div className={`memory-card ${pillText ? "memory-card--draft" : ""}`}>
+      {pillText && <span className="memory-status-pill">{pillText}</span>}
+      <div className="memory-content">
+        <h4 className="memory-title">{memory.title}</h4>
+        {memory.content && memory.content !== memory.title && (
+          <p className="memory-text">{memory.content}</p>
+        )}
+
+        {tagged.length > 0 && (
+          <div className="memory-tags">
+            {tagged.map((student) => (
+              <span key={student.student_id} className="memory-tag-chip">
+                {student.first_name} {student.last_name}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {pending.length > 0 && (
+          <div className="memory-pending-tags">
+            <span className="pending-label">Awaiting approval:</span>
+            <div className="pending-tag-list">
+              {pending.map((student) => (
+                <span
+                  key={student.student_id}
+                  className="memory-tag-chip pending"
+                >
+                  {student.first_name} {student.last_name}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {memory.images && memory.images.length > 0 && (
+          <div className="memory-images">
+            {memory.images.map((img) => (
+              <div key={img.id} className="polaroid memory-image-wrap">
+                <img src={img.url} alt="" loading="lazy" />
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      <div className="memory-footer">
+        <span className="meta-date">{formatDate(memory.created_at)}</span>
+      </div>
+    </div>
+  );
+};
+
+const PrivacyMemoryCollection = ({
+  title,
+  memories,
+  formatDate,
+  isDraft = false,
+}) => (
+  <section className="privacy-memory-group">
+    <div className="privacy-title-row">
+      <h5 className="privacy-memory-title">{title}</h5>
+      {isDraft && memories.length > 0 && (
+        <span className="privacy-memory-pill">Draft</span>
+      )}
+    </div>
+    {memories.length === 0 ? (
+      <p className="privacy-memory-empty">No memories in this group.</p>
+    ) : (
+      <div className="profile-memories-grid">
+        {memories.map((memory) => {
+          const tagged = memory.tagged_students || [];
+          const pending = memory.pending_tags || [];
+
+          return (
+            <div key={`${title}-${memory.id}`} className="profile-memory-card">
+              <h6 className="profile-memory-headline">{memory.title}</h6>
+              {memory.content && (
+                <p className="profile-memory-content">{memory.content}</p>
+              )}
+              {tagged.length > 0 && (
+                <div className="profile-memory-tags">
+                  {tagged.map((student) => (
+                    <span key={student.student_id} className="memory-tag-chip">
+                      {student.first_name} {student.last_name}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {pending.length > 0 && (
+                <div className="profile-memory-pending">
+                  <span className="pending-label">Pending tags:</span>
+                  <div className="pending-tag-list">
+                    {pending.map((student) => (
+                      <span
+                        key={student.student_id}
+                        className="memory-tag-chip pending"
+                      >
+                        {student.first_name} {student.last_name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {memory.images && memory.images.length > 0 && (
+                <div className="profile-memory-images">
+                  {memory.images.slice(0, 3).map((img) => (
+                    <img key={img.id} src={img.url} alt="" loading="lazy" />
+                  ))}
+                </div>
+              )}
+              <span className="profile-memory-date">
+                {formatDate(memory.created_at)}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    )}
+  </section>
+);
+
 export default Dashboard;
