@@ -118,6 +118,55 @@ const buildImagesFromLayout = (layout, buckets) => {
 
 const sanitizeExistingImagePayload = (entries = []) => entries.map(e => ({ id: Number(e?.id), url: typeof e?.url === "string" ? e.url.trim() : "" })).filter(e => Number.isInteger(e.id) && e.id > 0 && isLikelyUrl(e.url));
 
+export const listClubMemories = async (req, res) => {
+  const { clubCode } = req.params;
+  const page = Math.max(Number(req.query.page) || 1, 1);
+  const limit = Math.min(Math.max(Number(req.query.limit) || 20, 5), 50);
+  const offset = (page - 1) * limit;
+
+  try {
+    const user = await User.findById(req.user.userId);
+    if (!user || !user.studentId) return res.status(400).json({ error: "Complete your profile first." });
+
+    const club = await Club.findOne({ code: clubCode, 'members.studentId': user.studentId });
+    if (!club) return res.status(403).json({ error: "Access denied. You must be a member of this club." });
+
+    const album = await Album.findOne({ type: 'club', title: `${club.name} Club Memories` });
+    if (!album) return res.json({ memories: [], clubName: club.name });
+
+    const memories = await Memory.find({ albumId: album._id, status: 'approved' })
+        .sort({ created_at: -1 })
+        .limit(limit)
+        .skip(offset)
+        .lean();
+
+    const memIds = memories.map(m => m._id);
+    const images = await Image.find({ entityType: 'memory', entityId: { $in: memIds.map(String) } }).sort({ sortOrder: 1 });
+    const creatorIds = [...new Set(memories.map(m => m.createdBy))];
+    const creators = await Student.find({ studentId: { $in: creatorIds } }).select('studentId firstName lastName department graduationYear photoUrl').lean();
+
+    const feed = memories.map(m => {
+        const creator = creators.find(s => s.studentId === m.createdBy);
+        return {
+            id: m._id,
+            title: m.title,
+            content: m.content,
+            createdAt: m.created_at,
+            creator: creator,
+            author_name: creator ? `${creator.firstName} ${creator.lastName}` : "Unknown Member",
+            images: images.filter(i => i.entityId === String(m._id)).map(i => ({ id: i._id, url: i.photoUrl, sort: i.sortOrder })),
+            commentCount: m.comments?.length || 0,
+            reactionCount: m.reactions?.length || 0
+        };
+    });
+
+    res.json({ memories: feed, clubName: club.name });
+  } catch (error) {
+    console.error("List Club Memories Error:", error);
+    res.status(500).json({ error: "Failed to load club memories." });
+  }
+};
+
 export const createMemory = async (req, res) => {
   const headline = req.body.headline?.trim();
   const caption = req.body.caption?.trim();

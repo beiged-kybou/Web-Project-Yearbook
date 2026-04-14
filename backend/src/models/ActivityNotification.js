@@ -1,8 +1,8 @@
 import mongoose from 'mongoose';
 
 const activityNotificationSchema = new mongoose.Schema({
-  studentId: { type: String, required: true, ref: 'Student' },
-  actorStudentId: { type: String, ref: 'Student' },
+  studentId: { type: String, required: true },
+  actorStudentId: { type: String },
   memoryId: { type: mongoose.Schema.Types.ObjectId, ref: 'Memory' },
   notificationType: { 
     type: String, 

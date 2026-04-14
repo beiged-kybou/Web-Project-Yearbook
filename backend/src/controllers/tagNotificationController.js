@@ -7,18 +7,26 @@ export const getMyTagNotifications = async (req, res) => {
   const { userId } = req.user;
 
   try {
-    const user = await User.findById(userId).populate('studentId');
+    const user = await User.findById(userId);
 
     if (!user || !user.studentId) {
       return res.status(400).json({ error: "Link a student profile to receive tag notifications." });
     }
 
-    const studentId = user.studentId.studentId;
+    const studentId = user.studentId;
 
-    const notifications = await TagNotification.find({ taggedStudentId: studentId })
+    const notificationsResult = await TagNotification.find({ taggedStudentId: studentId })
       .sort({ created_at: -1 })
       .populate('memoryId', 'title content created_at')
-      .populate('requestedByStudentId', 'firstName lastName studentId');
+      .lean();
+
+    const requesterIds = notificationsResult.map(n => n.requestedByStudentId);
+    const students = await Student.find({ studentId: { $in: requesterIds } }).lean();
+
+    const notifications = notificationsResult.map(n => ({
+      ...n,
+      requestedByStudentId: students.find(s => s.studentId === n.requestedByStudentId)
+    }));
 
     res.json({ notifications });
   } catch (error) {
@@ -38,13 +46,13 @@ export const actOnTagNotification = async (req, res) => {
   }
 
   try {
-    const user = await User.findById(userId).populate('studentId');
+    const user = await User.findById(userId);
 
     if (!user || !user.studentId) {
        return res.status(400).json({ error: "Link a student profile before acting on tags." });
     }
 
-    const studentId = user.studentId.studentId;
+    const studentId = user.studentId;
     const notification = await TagNotification.findById(notificationId);
 
     if (!notification) {

@@ -527,15 +527,60 @@ body::before {
 
 .club-card-footer {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  flex-direction: column;
+  gap: 1rem;
+  align-items: flex-start;
   font-size: 0.75rem;
 }
 
+.club-membership {
+  width: 100%;
+  border-bottom: 1px dashed var(--tui-col-grid);
+  padding-bottom: 0.4rem;
+}
+
+.club-actions-group {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+}
+
 .club-action {
-  padding: 0.35rem 0.8rem;
-  border-radius: 4px;
+  padding: 0.4rem 0.9rem;
+  border-radius: 6px;
   border: var(--tui-border);
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.club-action.join {
+  background: rgba(166, 227, 161, 0.1);
+  border-color: var(--tui-col-success);
+  color: var(--tui-col-success);
+}
+
+.club-action.leave {
+  background: rgba(243, 139, 168, 0.1);
+  border-color: var(--tui-col-critical);
+  color: var(--tui-col-critical);
+}
+
+.club-action.navigate {
+  background: rgba(137, 220, 235, 0.1);
+  border-color: var(--tui-col-accent);
+  color: var(--tui-col-accent);
+}
+
+.club-action:hover {
+  filter: brightness(1.2);
+  transform: translateY(-1px);
+}
+
+.club-action:active {
+  transform: translateY(0);
 }
 
 .notifications-panel {

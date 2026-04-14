@@ -7,13 +7,17 @@ import Memory from "../models/Memory.js";
 import EventPost from "../models/EventPost.js";
 import Department from "../models/Department.js";
 import Club from "../models/Club.js";
+import Student from "../models/Student.js";
+import User from "../models/User.js";
+import Album from "../models/Album.js";
+import mongoose from "mongoose";
 
 const PAGE_OWNER_TYPES = new Set(["department", "club", "individual", "admin"]);
 const RELEASE_STATUSES = new Set(["draft", "collecting", "final", "published"]);
 
 const uploadBufferToCloudinary = (buffer, folder = "iut-yearbook/yearbooks") =>
   new Promise((resolve, reject) => {
-    const stream = cloudinary.uploader.upload_stream(
+    const stream = cloudinary.v2.uploader.upload_stream(
       { folder, resource_type: "image" },
       (error, result) => {
         if (error) { reject(error); return; }
@@ -425,6 +429,146 @@ export const getPageDetail = async (req, res) => {
     res.json({ page });
   } catch (error) {
     res.status(500).json({ error: "Failed to load page" });
+  }
+};
+
+// Remove the redundant duplicate export that used undefined 'imageSchema'
+export const previewPersonalYearbook = async (req, res) => {
+  const { privacy, clubCode, startDate, endDate } = req.query;
+  const userId = req.user.userId;
+
+  try {
+    const user = await User.findById(userId).populate('studentId').lean();
+    if (!user || !user.studentId) return res.status(400).json({ error: "Complete your profile first." });
+
+    const creator = user.studentId;
+    const query = { status: 'approved' };
+
+    // Apply Time filter
+    if (startDate || endDate) {
+      query.created_at = {};
+      if (startDate) query.created_at.$gte = new Date(startDate);
+      if (endDate) query.created_at.$lte = new Date(endDate);
+    }
+
+    // Apply Privacy filter
+    if (privacy === 'department') {
+      const album = await Album.findOne({ type: 'department', title: 'Department Memories' });
+      if (album) query.albumId = album._id;
+    } else if (privacy === 'batch') {
+      const album = await Album.findOne({ type: 'batch', title: 'Batch Memories' });
+      if (album) query.albumId = album._id;
+    } else if (privacy === 'club') {
+      if (!clubCode) return res.status(400).json({ error: "clubCode is required for club privacy." });
+      const club = await Club.findOne({ code: clubCode });
+      if (!club) return res.status(404).json({ error: "Club not found." });
+      const album = await Album.findOne({ type: 'club', title: `${club.name} Club Memories` });
+      if (album) query.albumId = album._id;
+    } else if (privacy === 'public') {
+      query.albumId = { $exists: true }; // Generic check, could be more specific
+    }
+
+    const memories = await Memory.find(query)
+      .sort({ created_at: 1 })
+      .lean();
+
+    const memIds = memories.map(m => m._id);
+    const images = await Image.find({ entityType: 'memory', entityId: { $in: memIds.map(String) } }).sort({ sortOrder: 1 });
+    
+    const creatorIds = [...new Set(memories.map(m => m.createdBy))];
+    const creators = await Student.find({ studentId: { $in: creatorIds } }).select('studentId firstName lastName').lean();
+
+    const feed = memories.map(m => {
+      const creatorInfo = creators.find(s => s.studentId === m.createdBy);
+      return {
+        id: m._id,
+        title: m.title,
+        content: m.content,
+        createdAt: m.created_at,
+        authorName: creatorInfo ? `${creatorInfo.firstName} ${creatorInfo.lastName}` : "Unknown",
+        images: images.filter(i => i.entityId === String(m._id)).map(i => ({ id: i._id, url: i.photoUrl }))
+      };
+    });
+
+    res.json({ memories: feed });
+  } catch (error) {
+    console.error("Preview Personal Yearbook Error:", error);
+    res.status(500).json({ error: "Failed to generate preview." });
+  }
+};
+
+export const createPersonalYearbook = async (req, res) => {
+  const { title, privacy, clubCode, startDate, endDate, memoryIds } = req.body;
+
+  if (!title?.trim()) return res.status(400).json({ error: "Title is required" });
+  if (!memoryIds || !Array.isArray(memoryIds) || memoryIds.length === 0) {
+    return res.status(400).json({ error: "At least one memory is required." });
+  }
+
+  try {
+    const user = await User.findById(req.user.userId).populate('studentId').lean();
+    let coverPhotoUrl = null;
+    if (req.file) {
+      const uploadResult = await uploadBufferToCloudinary(req.file.buffer, "iut-yearbook/personal-yearbooks");
+      coverPhotoUrl = uploadResult.secure_url;
+    }
+
+    const release = await YearbookRelease.create({
+      title: title.trim(),
+      year: new Date().getFullYear(),
+      theme: "Personal",
+      coverPhotoUrl,
+      status: 'published', // Personal yearbooks are "published" by default for sharing
+      privacy,
+      clubCode,
+      startDate: startDate ? new Date(startDate) : null,
+      endDate: endDate ? new Date(endDate) : null,
+      createdBy: req.user.userId,
+      studentId: user.studentId.studentId
+    });
+
+    // Create pages for each memory
+    const pages = [];
+    for (let i = 0; i < memoryIds.length; i++) {
+      const memoryId = memoryIds[i];
+      const memory = await Memory.findById(memoryId).lean();
+      if (!memory) continue;
+
+      const page = await YearbookPage.create({
+        releaseId: release._id,
+        pageNumber: i + 1,
+        ownerType: 'individual',
+        ownerRef: user.studentId.studentId,
+        assignedUserId: req.user.userId,
+        title: memory.title,
+        status: 'approved'
+      });
+
+      // Snapshot the memory for the page
+      const snapshot = await snapshotMemory(memoryId);
+      await YearbookPagePost.create({
+        pageId: page._id,
+        entityType: 'memory',
+        entityId: memoryId,
+        snapshot
+      });
+
+      // Copy images to the page
+      const memImages = await Image.find({ entityType: 'memory', entityId: String(memoryId) }).sort({ sortOrder: 1 });
+      for (let j = 0; j < memImages.length; j++) {
+        await Image.create({
+          entityType: 'yearbook_page',
+          entityId: String(page._id),
+          photoUrl: memImages[j].photoUrl,
+          sortOrder: j
+        });
+      }
+    }
+
+    res.status(201).json({ releaseId: release._id, message: "Personal yearbook created!" });
+  } catch (error) {
+    console.error("Create Personal Yearbook Error:", error);
+    res.status(500).json({ error: "Failed to create personal yearbook." });
   }
 };
 

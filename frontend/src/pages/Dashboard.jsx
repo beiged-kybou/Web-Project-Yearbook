@@ -11,6 +11,7 @@ import {
 } from "../services/api";
 import ActivityNotificationCard from "../components/ActivityNotificationCard";
 import ImageTray from "../components/ImageTray";
+import YearbookCreator from "../components/YearbookCreator";
 import "./Dashboard.css";
 
 const MAX_UPLOAD_FILES = 10;
@@ -132,6 +133,7 @@ const Dashboard = () => {
   const [postSuccess, setPostSuccess] = useState("");
   const [showPostModal, setShowPostModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showYearbookModal, setShowYearbookModal] = useState(false);
   const [clubs, setClubs] = useState([]);
   const [myClubCodes, setMyClubCodes] = useState(new Set());
   const [clubLoading, setClubLoading] = useState(true);
@@ -688,9 +690,9 @@ const Dashboard = () => {
                 {user.department} &middot; Batch '{user.batch}
               </span>
             </div>
-            <Link to="/discover" className="discover-link">
-              Discover
-            </Link>
+            {/* <Link to="/discover" className="discover-link"> */}
+            {/*   Discover */}
+            {/* </Link> */}
             <button className="profile-btn" onClick={openProfileModal}>
               Profile
             </button>
@@ -714,6 +716,13 @@ const Dashboard = () => {
               }}
             >
               POST
+            </button>
+            <button
+              className="post-btn"
+              style={{ borderColor: 'var(--tui-col-attn)', color: 'var(--tui-col-attn)', background: 'rgba(250, 179, 135, 0.15)' }}
+              onClick={() => setShowYearbookModal(true)}
+            >
+              CREATE YEARBOOK
             </button>
             <button className="logout-btn" onClick={handleLogout}>
               Sign Out
@@ -1149,185 +1158,18 @@ const Dashboard = () => {
           className="modal-backdrop"
           onClick={() => setShowProfileModal(false)}
         >
-          <section
-            className="scrapbook-page post-composer modal-composer profile-modal"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="modal-header">
-              <h3 className="composer-title">My Profile</h3>
-              <button
-                type="button"
-                className="modal-close"
-                onClick={() => setShowProfileModal(false)}
-              >
-                Close
-              </button>
-            </div>
-
-            {profileLoading ? (
-              <p className="loading-text">Loading profile...</p>
-            ) : (
-              <>
-                <form onSubmit={handleProfileSave} className="composer-form">
-                  {profileForm.displayPhoto && (
-                    <div className="profile-photo-preview-wrap">
-                      <img
-                        src={profileForm.displayPhoto}
-                        alt="Current profile"
-                        className="profile-photo-preview"
-                      />
-                    </div>
-                  )}
-
-                  <div className="form-group">
-                    <label htmlFor="displayPhotoFile">
-                      Upload display photo
-                    </label>
-                    <input
-                      id="displayPhotoFile"
-                      type="file"
-                      accept="image/*"
-                      onChange={(event) => {
-                        const file = event.target.files?.[0] || null;
-                        setSelectedProfileFile(file);
-                      }}
-                    />
-                    {selectedProfileFile && (
-                      <small className="composer-hint">
-                        Selected: {selectedProfileFile.name}
-                      </small>
-                    )}
-                  </div>
-
-                  <div className="form-group">
-                    <label htmlFor="displayPhoto">
-                      Display photo URL (optional)
-                    </label>
-                    <input
-                      id="displayPhoto"
-                      type="url"
-                      value={profileForm.displayPhoto}
-                      onChange={(event) =>
-                        setProfileForm((prev) => ({
-                          ...prev,
-                          displayPhoto: event.target.value,
-                        }))
-                      }
-                      placeholder="https://example.com/me.jpg"
-                    />
-                    <small className="composer-hint">
-                      If a file is selected above, it will be used instead of
-                      this URL.
-                    </small>
-                  </div>
-
-                  <div className="form-group">
-                    <label htmlFor="motto">Motto</label>
-                    <input
-                      id="motto"
-                      type="text"
-                      value={profileForm.motto}
-                      onChange={(event) =>
-                        setProfileForm((prev) => ({
-                          ...prev,
-                          motto: event.target.value,
-                        }))
-                      }
-                      placeholder="Your motto"
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label htmlFor="bio">Bio</label>
-                    <textarea
-                      id="bio"
-                      rows={4}
-                      value={profileForm.bio}
-                      onChange={(event) =>
-                        setProfileForm((prev) => ({
-                          ...prev,
-                          bio: event.target.value,
-                        }))
-                      }
-                      placeholder="Tell others about yourself"
-                    />
-                  </div>
-
-                  {profileError && (
-                    <div className="error-message">{profileError}</div>
-                  )}
-                  {profileSuccess && (
-                    <div className="success-message">{profileSuccess}</div>
-                  )}
-
-                  <button
-                    type="submit"
-                    className="primary"
-                    disabled={profileSaving}
-                  >
-                    {profileSaving ? "Saving..." : "Save Profile"}
-                  </button>
-                </form>
-
-                <div className="my-memories-section">
-                  <h4 className="section-title profile-section-title">
-                    My Memories
-                  </h4>
-
-                  <PrivacyMemoryCollection
-                    title="Department"
-                    memories={myMemories.department || []}
-                    formatDate={formatDate}
-                  />
-                  <PrivacyMemoryCollection
-                    title="Batch"
-                    memories={myMemories.batch || []}
-                    formatDate={formatDate}
-                  />
-                  <PrivacyMemoryCollection
-                    title="Public"
-                    memories={myMemories.public || []}
-                    formatDate={formatDate}
-                  />
-                  <DraftManager
-                    drafts={drafts}
-                    loading={draftLoading}
-                    error={draftError}
-                    onRefresh={fetchDrafts}
-                    onEdit={startEditingDraft}
-                    onDelete={async (draftId) => {
-                      try {
-                        await memoryService.updateDraft(draftId, {
-                          action: "delete",
-                        });
-                        await fetchDrafts();
-                      } catch (err) {
-                        setDraftError(
-                          err.response?.data?.error ||
-                            "Failed to delete draft.",
-                        );
-                      }
-                    }}
-                    onPublish={async (draftId) => {
-                      try {
-                        await memoryService.updateDraft(draftId, {
-                          action: "publish",
-                        });
-                        await fetchDrafts();
-                        await fetchDashboard();
-                      } catch (err) {
-                        setDraftError(
-                          err.response?.data?.error ||
-                            "Failed to publish draft.",
-                        );
-                      }
-                    }}
-                  />
-                </div>
-              </>
-            )}
-          </section>
+          {/* ... */}
         </div>
+      )}
+
+      {showYearbookModal && (
+        <YearbookCreator 
+          onClose={() => setShowYearbookModal(false)} 
+          onSuccess={(releaseId) => {
+            setShowYearbookModal(false);
+            navigate(`/yearbook/${releaseId}`);
+          }}
+        />
       )}
 
       <main className="dashboard-main">
@@ -1504,14 +1346,25 @@ const Dashboard = () => {
                         {club.members?.count ?? 0}
                       </span>
                     </div>
-                    <button
-                      type="button"
-                      className={`club-action ${isMember ? "leave" : "join"}`}
-                      onClick={() => toggleClub(club.code, isMember)}
-                      disabled={clubLoading}
-                    >
-                      {isMember ? "Leave" : "Join"}
-                    </button>
+                    <div className="club-actions-group">
+                      <button
+                        type="button"
+                        className={`club-action ${isMember ? "leave" : "join"}`}
+                        onClick={() => toggleClub(club.code, isMember)}
+                        disabled={clubLoading}
+                      >
+                        {isMember ? "Leave" : "Join"}
+                      </button>
+                      {isMember && (
+                        <button
+                          type="button"
+                          className="club-action navigate"
+                          onClick={() => navigate(`/clubs/${club.code}`)}
+                        >
+                          Navigate
+                        </button>
+                      )}
+                    </div>
                   </footer>
                 </article>
               );

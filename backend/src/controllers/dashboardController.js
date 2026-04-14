@@ -10,33 +10,17 @@ const fetchMemoriesWithExtras = async (query, limit = 20) => {
     const memories = await Memory.find(query)
     .sort({ created_at: -1 })
     .limit(limit)
-    .populate({
-      path: 'createdBy',
-      model: 'Student',
-      localField: 'createdBy',
-      foreignField: 'studentId',
-      select: 'firstName lastName studentId'
-    })
-    .populate({
-      path: 'participants.studentId',
-      model: 'Student',
-      localField: 'participants.studentId',
-      foreignField: 'studentId',
-      select: 'studentId firstName lastName department graduationYear photoUrl'
-    })
     .lean();
 
   const memoryIds = memories.map(m => m._id);
+  const creatorIds = memories.map(m => m.createdBy).filter(Boolean);
+  const participantIds = memories.flatMap(m => (m.participants || []).map(p => p.studentId)).filter(Boolean);
+  
+  const allStudentIds = [...new Set([...creatorIds, ...participantIds])];
+  const students = await Student.find({ studentId: { $in: allStudentIds } }).lean();
 
   const imagesPromise = Image.find({ entityType: 'memory', entityId: { $in: memoryIds.map(String) } }).sort({ sortOrder: 1 });
-    const pendingTagsPromise = TagNotification.find({ memoryId: { $in: memoryIds }, status: 'pending' })
-    .populate({
-      path: 'taggedStudentId',
-      model: 'Student',
-      localField: 'taggedStudentId',
-      foreignField: 'studentId',
-      select: 'studentId firstName lastName department graduationYear photoUrl'
-    });
+    const pendingTagsPromise = TagNotification.find({ memoryId: { $in: memoryIds }, status: 'pending' }).lean();
     
   const [images, pendingTags] = await Promise.all([imagesPromise, pendingTagsPromise]);
 
@@ -45,7 +29,7 @@ const fetchMemoriesWithExtras = async (query, limit = 20) => {
         id: img._id, url: img.photoUrl, sort: img.sortOrder
     }));
     
-    // Using custom IDs for references inside `Memory` participants
+    const creator = students.find(s => s.studentId === m.createdBy);
     const taggedStudents = (m.participants || []).map(p => p.studentId);
     
     const memPendingTags = pendingTags
@@ -58,8 +42,8 @@ const fetchMemoriesWithExtras = async (query, limit = 20) => {
       content: m.content,
       album_id: m.albumId,
       created_at: m.created_at,
-      created_by_name: m.createdBy ? `${m.createdBy.firstName} ${m.createdBy.lastName}` : null,
-      created_by_id: m.createdBy?.studentId,
+      created_by_name: creator ? `${creator.firstName} ${creator.lastName}` : null,
+      created_by_id: m.createdBy,
       images: memImages,
       tagged_students: taggedStudents,
       pending_tags: memPendingTags
@@ -98,38 +82,26 @@ export const getDashboard = async (req, res) => {
 
     // Fetch Albums
     const [deptAlbums, batchAlbums, publicAlbums] = await Promise.all([
-      Album.find({ type: 'department', createdBy: { $in: deptStudentIds } }).sort({ created_at: -1 }).limit(20).populate({
-        path: 'createdBy',
-        model: 'Student',
-        localField: 'createdBy',
-        foreignField: 'studentId',
-        select: 'firstName lastName studentId'
-      }).lean(),
-      Album.find({ type: 'batch', createdBy: { $in: batchStudentIds } }).sort({ created_at: -1 }).limit(20).populate({
-        path: 'createdBy',
-        model: 'Student',
-        localField: 'createdBy',
-        foreignField: 'studentId',
-        select: 'firstName lastName studentId'
-      }).lean(),
-      Album.find({ type: 'group' }).sort({ created_at: -1 }).limit(20).populate({
-        path: 'createdBy',
-        model: 'Student',
-        localField: 'createdBy',
-        foreignField: 'studentId',
-        select: 'firstName lastName studentId'
-      }).lean(),
+      Album.find({ type: 'department', createdBy: { $in: deptStudentIds } }).sort({ created_at: -1 }).limit(20).lean(),
+      Album.find({ type: 'batch', createdBy: { $in: batchStudentIds } }).sort({ created_at: -1 }).limit(20).lean(),
+      Album.find({ type: 'group' }).sort({ created_at: -1 }).limit(20).lean(),
     ]);
 
-    const formatAlbum = (a) => ({
-      id: a._id,
-      title: a.title,
-      description: a.description,
-      type: a.type,
-      created_at: a.created_at,
-      created_by_name: a.createdBy ? `${a.createdBy.firstName} ${a.createdBy.lastName}` : null,
-      created_by_id: a.createdBy?.studentId
-    });
+    const albumCreatorIds = [...new Set([...deptAlbums, ...batchAlbums, ...publicAlbums].map(a => a.createdBy))];
+    const albumCreators = await Student.find({ studentId: { $in: albumCreatorIds } }).lean();
+
+    const formatAlbum = (a) => {
+      const creator = albumCreators.find(s => s.studentId === a.createdBy);
+      return {
+        id: a._id,
+        title: a.title,
+        description: a.description,
+        type: a.type,
+        created_at: a.created_at,
+        created_by_name: creator ? `${creator.firstName} ${creator.lastName}` : null,
+        created_by_id: a.createdBy
+      };
+    };
 
     const formattedDeptAlbums = deptAlbums.map(formatAlbum);
     const formattedBatchAlbums = batchAlbums.map(formatAlbum);

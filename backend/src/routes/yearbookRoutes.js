@@ -16,12 +16,16 @@ import {
   getPublishedRelease,
   getPageDetail,
   deletePageImage,
+  previewPersonalYearbook,
+  createPersonalYearbook,
 } from "../controllers/yearbookController.js";
 import { authenticate, authorizeRootAdmin } from "../middleware/auth.js";
 import { eventUpload } from "../middleware/upload.js";
 
 const router = express.Router();
 
+router.get("/preview", authenticate, previewPersonalYearbook);
+router.post("/personal", authenticate, eventUpload.single("cover"), createPersonalYearbook);
 router.get("/", authenticate, authorizeRootAdmin, listReleases);
 router.post("/", authenticate, authorizeRootAdmin, eventUpload.single("cover"), createRelease);
 router.patch("/:releaseId/status", authenticate, authorizeRootAdmin, updateReleaseStatus);

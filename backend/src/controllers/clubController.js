@@ -1,5 +1,6 @@
 import Club from '../models/Club.js';
 import User from '../models/User.js';
+import Student from '../models/Student.js';
 
 const buildStudentSummary = (student) =>
   student
@@ -15,15 +16,17 @@ const buildStudentSummary = (student) =>
 
 export const listClubs = async (req, res) => {
   try {
-    const clubsResult = await Club.find().populate({
-      path: 'members.studentId',
-      select: 'studentId firstName lastName department graduationYear photoUrl',
-      populate: { path: 'graduationYear' }
-    }).sort({ name: 1 });
+    const clubsResult = await Club.find().sort({ name: 1 }).lean();
 
-    const clubs = clubsResult.map(c => {
+    const clubs = await Promise.all(clubsResult.map(async (c) => {
       const sortedMembers = [...c.members].sort((a, b) => b.joinedAt - a.joinedAt);
-      const recentMembers = sortedMembers.map(m => buildStudentSummary(m.studentId)).filter(Boolean);
+      const recentMemberIds = sortedMembers.slice(0, 5).map(m => m.studentId);
+      
+      const students = await Student.find({ studentId: { $in: recentMemberIds } }).lean();
+      const recentMembers = recentMemberIds
+        .map(id => students.find(s => s.studentId === id))
+        .filter(Boolean)
+        .map(buildStudentSummary);
       
       return {
         id: c._id,
@@ -35,7 +38,7 @@ export const listClubs = async (req, res) => {
           recentMembers: recentMembers
         }
       };
-    });
+    }));
 
     res.json({ clubs });
   } catch (error) {
@@ -53,14 +56,16 @@ export const joinClub = async (req, res) => {
   }
 
   try {
-    const user = await User.findById(userId).populate({
-        path: 'studentId',
-        populate: { path: 'graduationYear' }
-    });
+    const user = await User.findById(userId);
     if (!user || !user.studentId) {
       return res.status(400).json({ error: "Link a student profile before joining clubs." });
     }
-    const student = user.studentId;
+    const studentId = user.studentId;
+
+    const student = await Student.findOne({ studentId });
+    if (!student) {
+      return res.status(404).json({ error: "Student profile not found." });
+    }
 
     const club = await Club.findOne({ code: clubCode });
     if (!club) {
@@ -68,9 +73,9 @@ export const joinClub = async (req, res) => {
     }
 
     // Add member if not exists
-    const isMember = club.members.some(m => String(m.studentId) === String(student._id));
+    const isMember = club.members.some(m => String(m.studentId) === String(studentId));
     if (!isMember) {
-        club.members.push({ studentId: student._id });
+        club.members.push({ studentId: studentId });
         await club.save();
     }
 
@@ -98,11 +103,11 @@ export const leaveClub = async (req, res) => {
   }
 
   try {
-    const user = await User.findById(userId).populate('studentId');
+    const user = await User.findById(userId);
     if (!user || !user.studentId) {
       return res.status(400).json({ error: "Link a student profile before leaving clubs." });
     }
-    const studentId = user.studentId._id;
+    const studentId = user.studentId;
 
     const club = await Club.findOne({ code: clubCode });
     if (!club) {
@@ -136,11 +141,11 @@ export const myClubs = async (req, res) => {
   try {
     const { userId } = req.user;
 
-    const user = await User.findById(userId).populate('studentId');
+    const user = await User.findById(userId);
     if (!user || !user.studentId) {
       return res.status(400).json({ error: "Link a student profile before viewing clubs." });
     }
-    const studentId = user.studentId._id;
+    const studentId = user.studentId;
 
     const clubsResult = await Club.find({ 'members.studentId': studentId }).lean();
 

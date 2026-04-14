@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 
 const participantSchema = new mongoose.Schema({
-  studentId: { type: String, required: true, ref: 'Student' } // uses custom string id
+  studentId: { type: String, required: true } // uses custom string id
 }, { timestamps: { createdAt: 'joinedAt', updatedAt: false }, _id: false });
 
 const clubSchema = new mongoose.Schema({

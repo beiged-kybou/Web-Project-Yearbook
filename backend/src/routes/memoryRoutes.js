@@ -11,6 +11,7 @@ import {
   addComment,
   updateComment,
   deleteComment,
+  listClubMemories,
 } from "../controllers/memoryController.js";
 import { authenticate } from "../middleware/auth.js";
 import { memoryUpload } from "../middleware/upload.js";
@@ -22,6 +23,7 @@ router.post("/public", authenticate, memoryUpload.array("images", 10), createPub
 // router.get("/drafts", authenticate, listDrafts);
 // router.put("/drafts/:draftId", authenticate, memoryUpload.array("images", 10), updateDraft);
 router.get("/feed", authenticate, listFeed);
+router.get("/club/:clubCode", authenticate, listClubMemories);
 router.post("/:memoryId/reactions", authenticate, upsertReaction);
 router.delete("/:memoryId/reactions", authenticate, deleteReaction);
 router.get("/:memoryId/comments", authenticate, listComments);

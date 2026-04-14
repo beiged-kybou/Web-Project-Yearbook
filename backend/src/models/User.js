@@ -18,7 +18,7 @@ const userSchema = new mongoose.Schema({
     default: 'student'
   },
   lastLogin: { type: Date },
-  studentId: { type: String, ref: 'Student' }
+  studentId: { type: String }
 }, { timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' } });
 
 

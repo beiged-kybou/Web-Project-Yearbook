@@ -2,9 +2,9 @@ import mongoose from 'mongoose';
 
 const tagNotificationSchema = new mongoose.Schema({
   memoryId: { type: mongoose.Schema.Types.ObjectId, ref: 'Memory', required: true },
-  taggedStudentId: { type: String, required: true, ref: 'Student' },
-  requestedByStudentId: { type: String, required: true, ref: 'Student' },
-  actedByStudentId: { type: String, ref: 'Student' },
+  taggedStudentId: { type: String, required: true },
+  requestedByStudentId: { type: String, required: true },
+  actedByStudentId: { type: String },
   status: { 
     type: String, 
     required: true, 

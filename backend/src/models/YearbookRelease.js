@@ -9,10 +9,19 @@ const yearbookReleaseSchema = new mongoose.Schema({
   status: { 
     type: String, 
     required: true, 
-    enum: ['draft', 'collecting', 'final', 'published'],
+    enum: ['personal', 'draft', 'collecting', 'final', 'published'],
     default: 'draft' 
   },
+  privacy: { 
+    type: String, 
+    enum: ['batch', 'department', 'club', 'public', 'personal'],
+    default: 'public'
+  },
+  clubCode: { type: String },
+  startDate: { type: Date },
+  endDate: { type: Date },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  studentId: { type: String }, // link to student creator
   publishedAt: { type: Date }
 }, { timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' } });
 

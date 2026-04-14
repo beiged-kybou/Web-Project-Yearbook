@@ -134,6 +134,13 @@ export const clubService = {
     });
     return response.data;
   },
+  getClubMemories: async (clubCode) => {
+    const token = localStorage.getItem('accessToken');
+    const response = await api.get(`/memories/club/${clubCode}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  },
 };
 
 export const memoryService = {
@@ -379,6 +386,19 @@ export const yearbookService = {
   },
   getPublishedRelease: async (releaseId) => {
     const response = await api.get(`/yearbooks/public/${releaseId}`);
+    return response.data;
+  },
+  previewPersonalYearbook: async (params) => {
+    const response = await api.get('/yearbooks/preview', { params, ...authorized() });
+    return response.data;
+  },
+  createPersonalYearbook: async (formData) => {
+    const response = await api.post('/yearbooks/personal', formData, {
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
+        'Content-Type': 'multipart/form-data',
+      },
+    });
     return response.data;
   },
 };

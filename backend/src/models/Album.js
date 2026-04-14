@@ -8,7 +8,7 @@ const albumSchema = new mongoose.Schema({
     required: true, 
     enum: ['personal', 'group', 'batch', 'department'] 
   },
-  createdBy: { type: String, ref: 'Student' } // student_id
+  createdBy: { type: String } // student_id
 }, { timestamps: { createdAt: 'created_at', updatedAt: false } });
 
 export default mongoose.model('Album', albumSchema);

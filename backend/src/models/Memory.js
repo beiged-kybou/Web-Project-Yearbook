@@ -1,23 +1,23 @@
 import mongoose from 'mongoose';
 
 const reactionSchema = new mongoose.Schema({
-  studentId: { type: String, required: true, ref: 'Student' },
+  studentId: { type: String, required: true },
   reactionType: { type: String, default: 'love' }
 }, { timestamps: { createdAt: 'created_at', updatedAt: false }, _id: false });
 
 const commentSchema = new mongoose.Schema({
-  studentId: { type: String, required: true, ref: 'Student' },
+  studentId: { type: String, required: true },
   body: { type: String, required: true }
 }, { timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' } });
 
 const participantSchema = new mongoose.Schema({
-  studentId: { type: String, required: true, ref: 'Student' }
+  studentId: { type: String, required: true }
 }, { _id: false });
 
 const memorySchema = new mongoose.Schema({
   title: { type: String, required: true },
   content: { type: String },
-  createdBy: { type: String, ref: 'Student' }, // student_id
+  createdBy: { type: String }, // student_id
   albumId: { type: mongoose.Schema.Types.ObjectId, ref: 'Album' },
   status: { 
     type: String, 
