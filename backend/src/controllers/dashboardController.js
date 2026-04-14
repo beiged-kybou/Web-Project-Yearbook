@@ -71,24 +71,21 @@ export const getDashboard = async (req, res) => {
   const { userId } = req.user;
 
   try {
-    const user = await User.findById(userId).populate({
-        path: 'studentId',
-        model: 'Student',
-        localField: 'studentId',
-        foreignField: 'studentId'
-    });
-
+    const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({ error: "User not found." });
     }
-
-    const student = user.studentId;
-    const department = student?.department;
+    const student = await Student.findOne({ studentId: user.studentId });
     
-    const graduation_year = student?.graduationYear;
+    // TEMPORARY FIX: Fallback to manual check if studentId is string in User
+    let activeStudent = student;
+    if (!activeStudent && user.studentId) {
+      activeStudent = await Student.findOne({ studentId: user.studentId.toString() });
+    }
 
-    const batchYear = graduation_year ? graduation_year - 4 : null;
-    const batch = batchYear ? String(batchYear).slice(-2) : null;
+    const department = activeStudent?.department;
+    const graduation_year = activeStudent?.graduationYear;
+    const batch = graduation_year ? String(graduation_year - 4).slice(-2) : null;
 
     // Get arrays of student IDs for fast matching
     const [deptStudents, batchStudents] = await Promise.all([
@@ -171,14 +168,14 @@ export const getDashboard = async (req, res) => {
         id: user._id,
         displayName: user.displayName,
         email: user.email,
-        studentId: student?.studentId,
+        studentId: user.studentId, // Use user.studentId as fallback
         role: user.role,
         avatarUrl: user.avatarUrl,
-        firstName: student?.firstName,
-        lastName: student?.lastName,
-        department,
-        graduationYear: graduation_year,
-        batch,
+        firstName: activeStudent?.firstName || user.displayName?.split(" ")[0],
+        lastName: activeStudent?.lastName || user.displayName?.split(" ").slice(1).join(" "),
+        department: department || "N/A",
+        graduationYear: graduation_year || "N/A",
+        batch: batch || "N/A",
       },
       department: {
         code: department,
