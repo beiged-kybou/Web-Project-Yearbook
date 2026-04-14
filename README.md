@@ -21,12 +21,6 @@ This is a full-stack web application developed as a student project. It aims to 
 - **Club Directory:** Browse & join university clubs to see club-specific events & memories.
 - **Department Feeds:** View memories & updates specifically from your academic department.
 
-### Admin & Moderation
-
-- **Yearbook Studio:** Tools for admins to manage yearbook releases, assign editors, & moderate submissions.
-- **Interactive Digital Yearbook:** A scrapbook-style digital yearbook with a flipbook viewer for published memories.
-- **Dashboard:** Centralized view for managing student registrations, batches, & system configurations.
-
 ## 🛠️ Tech Stack
 
 - **Frontend:** React 18 (Vite), React Router, Axios, CSS Modules.
@@ -66,16 +60,7 @@ cp backend/.env.example backend/.env
 
 Fill in your database credentials, JWT secret, Cloudinary API keys, & SMTP details.
 
-### 3. Database Initialization (Optional)
-
-If you want to start with sample data, use the provided scripts in the `scripts/` directory:
-
-```bash
-# From the project root
-node scripts/seed-minimal.mjs
-```
-
-### 4. Running the Application
+### 3. Running the Application
 
 You will need two terminal windows:
 
@@ -99,8 +84,6 @@ The application will be available at `http://localhost:5173` (Vite default).
 
 - `/backend`: Express API, controllers, & database services.
 - `/frontend`: React client with scrapbook-themed UI.
-- `/scripts`: Database seeding & maintenance utilities.
-- `AGENTS.md`: Technical h&book for development conventions.
 
 ## 📝 License
 
